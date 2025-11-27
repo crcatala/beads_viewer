@@ -107,13 +107,13 @@ graph TD
     classDef output fill:#e8f5e9,stroke:#a5d6a7,stroke-width:2px,color:#2e7d32,rx:8
 
     subgraph storage [" 📂 Data Layer "]
-        A[".beads/beads.jsonl<br/><small>JSONL Issue Store</small>"]:::data
+        A[".beads/beads.jsonl<br/>JSONL Issue Store"]:::data
     end
 
     subgraph engine [" ⚙️ Analysis Engine "]
         B["Loader"]:::logic
         C["Graph Builder"]:::logic
-        D["9 Metrics<br/><small>PageRank · Betweenness · HITS...</small>"]:::logic
+        D["9 Metrics<br/>PageRank · Betweenness · HITS..."]:::logic
     end
 
     subgraph interface [" 🖥️ TUI Layer "]
@@ -124,8 +124,8 @@ graph TD
     end
 
     subgraph outputs [" 📤 Outputs "]
-        I["--robot-insights<br/><small>JSON for AI Agents</small>"]:::output
-        J["--export-md<br/><small>Markdown Report</small>"]:::output
+        I["--robot-insights<br/>JSON for AI Agents"]:::output
+        J["--export-md<br/>Markdown Report"]:::output
     end
 
     A --> B
