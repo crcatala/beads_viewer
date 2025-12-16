@@ -100,7 +100,7 @@ func FindJSONLPathWithWarnings(beadsDir string, warnFunc func(msg string)) (stri
 }
 
 // LoadIssues reads issues from the .beads directory in the given repository path.
-// Automatically finds the correct JSONL file (beads.jsonl preferred, issues.jsonl fallback).
+// Automatically finds the correct JSONL file (issues.jsonl preferred, beads.jsonl fallback).
 func LoadIssues(repoPath string) ([]model.Issue, error) {
 	if repoPath == "" {
 		var err error
