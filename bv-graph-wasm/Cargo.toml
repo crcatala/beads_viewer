@@ -11,7 +11,20 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["console_error_panic_hook", "core"]
+
+# Core algorithms used by the viewer (required)
+core = []
+
+# Optional algorithms that can be excluded to reduce bundle size
+eigenvector = []    # Eigenvector centrality (~2KB)
+kcore = []          # K-core decomposition (~1KB)
+slack = []          # Slack/float calculations (~1KB)
+hits = []           # HITS algorithm (~2KB)
+reachability = []   # Reachability queries (~1KB)
+
+# Include all algorithms
+full = ["core", "eigenvector", "kcore", "slack", "hits", "reachability"]
 
 [dependencies]
 wasm-bindgen = "0.2"

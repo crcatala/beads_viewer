@@ -92,7 +92,61 @@ main();
 
 ## Size
 
-Release build: ~110KB (57KB gzipped)
+### Current Measurements
+
+| Component | Raw | Gzipped | Budget |
+|-----------|-----|---------|--------|
+| WASM binary | ~213KB | ~94KB | <80KB |
+| JS glue | ~36KB | ~7KB | <25KB |
+| **Total** | ~249KB | ~101KB | **<120KB** |
+
+### Size Optimization
+
+The build pipeline applies multiple optimizations:
+
+1. **Cargo.toml profile settings**:
+   - `opt-level = "s"` - Optimize for size
+   - `lto = true` - Link-time optimization
+   - `codegen-units = 1` - Better optimization
+   - `panic = "abort"` - Remove panic unwinding
+
+2. **wasm-pack optimization**:
+   - Built-in wasm-opt pass during `--release` builds
+
+3. **Optional: Additional wasm-opt** (if installed):
+   ```bash
+   # Install binaryen for standalone wasm-opt
+   brew install binaryen  # macOS
+   apt install binaryen   # Ubuntu
+
+   # Run with extra optimization passes
+   wasm-opt -Os -o pkg/bv_graph_wasm_bg.wasm pkg/bv_graph_wasm_bg.wasm
+   ```
+
+### Checking Size
+
+```bash
+make size  # Shows raw and gzipped sizes
+```
+
+### Feature Flags
+
+The crate supports feature flags for optional algorithms:
+
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `core` | Core algorithms (pagerank, betweenness, cycles, critical path) | Yes |
+| `eigenvector` | Eigenvector centrality | No |
+| `kcore` | K-core decomposition | No |
+| `slack` | Slack/float calculations | No |
+| `hits` | HITS algorithm | No |
+| `reachability` | Reachability queries | No |
+| `full` | All algorithms | No |
+
+Build with specific features:
+```bash
+wasm-pack build --target web --release -- --features "core,eigenvector"
+```
 
 ## License
 
