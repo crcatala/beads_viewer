@@ -42,7 +42,6 @@ func sanitizeMermaidText(text string) string {
 		"<", "&lt;",
 		">", "&gt;",
 		"|", "/",
-		"#", "",
 		"`", "'",
 		"\n", " ",
 		"\r", "",

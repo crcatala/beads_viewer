@@ -80,7 +80,7 @@ func TestSanitizeMermaidText_BasicInput(t *testing.T) {
 		{"curly brackets replaced", "{config}", "(config)"},
 		{"angle brackets escaped", "A < B > C", "A &lt; B &gt; C"},
 		{"pipe replaced", "Option|Other", "Option/Other"},
-		{"hash removed", "Issue #123", "Issue 123"},
+		{"hash preserved", "Issue #123", "Issue #123"},
 		{"backticks replaced", "`code`", "'code'"},
 		{"newlines removed", "Line1\nLine2", "Line1 Line2"},
 		{"carriage returns removed", "Line1\r\nLine2", "Line1 Line2"},
