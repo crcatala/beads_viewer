@@ -21,6 +21,7 @@ type Issue struct {
 	EstimatedMinutes   *int          `json:"estimated_minutes,omitempty"`
 	CreatedAt          time.Time     `json:"created_at"`
 	UpdatedAt          time.Time     `json:"updated_at"`
+	DueDate            *time.Time    `json:"due_date,omitempty"`
 	ClosedAt           *time.Time    `json:"closed_at,omitempty"`
 	ExternalRef        *string       `json:"external_ref,omitempty"`
 	CompactionLevel    int           `json:"compaction_level,omitempty"`
@@ -44,6 +45,10 @@ func (i Issue) Clone() Issue {
 	if i.ClosedAt != nil {
 		v := *i.ClosedAt
 		clone.ClosedAt = &v
+	}
+	if i.DueDate != nil {
+		v := *i.DueDate
+		clone.DueDate = &v
 	}
 	if i.ExternalRef != nil {
 		v := *i.ExternalRef
