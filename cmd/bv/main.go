@@ -59,6 +59,11 @@ func main() {
 	robotLabelAttention := flag.Bool("robot-label-attention", false, "Output attention-ranked labels as JSON for AI agents")
 	attentionLimit := flag.Int("attention-limit", 5, "Limit number of labels in --robot-label-attention output")
 	robotAlerts := flag.Bool("robot-alerts", false, "Output alerts (drift + proactive) as JSON for AI agents")
+	// Smart suggestions (bv-180)
+	robotSuggest := flag.Bool("robot-suggest", false, "Output smart suggestions (duplicates, dependencies, labels, cycles) as JSON")
+	suggestType := flag.String("suggest-type", "", "Filter suggestions by type: duplicate, dependency, label, cycle")
+	suggestConfidence := flag.Float64("suggest-confidence", 0.0, "Minimum confidence for suggestions (0.0-1.0)")
+	suggestBead := flag.String("suggest-bead", "", "Filter suggestions for specific bead ID")
 	// Graph export (bv-136)
 	robotGraph := flag.Bool("robot-graph", false, "Output dependency graph as JSON/DOT/Mermaid for AI agents")
 	graphFormat := flag.String("graph-format", "json", "Graph output format: json, dot, mermaid")
@@ -1375,6 +1380,40 @@ func main() {
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(output); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding alerts: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Handle --robot-suggest (bv-180)
+	if *robotSuggest {
+		config := analysis.DefaultSuggestAllConfig()
+		config.MinConfidence = *suggestConfidence
+		config.FilterBead = *suggestBead
+
+		// Parse filter type
+		switch *suggestType {
+		case "duplicate", "duplicates":
+			config.FilterType = analysis.SuggestionPotentialDuplicate
+		case "dependency", "dependencies":
+			config.FilterType = analysis.SuggestionMissingDependency
+		case "label", "labels":
+			config.FilterType = analysis.SuggestionLabelSuggestion
+		case "cycle", "cycles":
+			config.FilterType = analysis.SuggestionCycleWarning
+		case "":
+			// All types
+		default:
+			fmt.Fprintf(os.Stderr, "Invalid suggest-type: %s (use: duplicate, dependency, label, cycle)\n", *suggestType)
+			os.Exit(1)
+		}
+
+		output := analysis.GenerateRobotSuggestOutput(issues, config, dataHash)
+
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(output); err != nil {
+			fmt.Fprintf(os.Stderr, "Error encoding suggestions: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
