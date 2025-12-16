@@ -206,3 +206,53 @@ type Comment struct {
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// Sprint represents a time-boxed period of work
+type Sprint struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	StartDate      time.Time `json:"start_date,omitempty"`
+	EndDate        time.Time `json:"end_date,omitempty"`
+	BeadIDs        []string  `json:"bead_ids,omitempty"`
+	VelocityTarget float64   `json:"velocity_target,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+}
+
+// Validate checks if the sprint data is logically valid
+func (s *Sprint) Validate() error {
+	if s.ID == "" {
+		return fmt.Errorf("sprint ID cannot be empty")
+	}
+	if s.Name == "" {
+		return fmt.Errorf("sprint name cannot be empty")
+	}
+	if !s.EndDate.IsZero() && !s.StartDate.IsZero() && s.EndDate.Before(s.StartDate) {
+		return fmt.Errorf("end_date (%v) cannot be before start_date (%v)", s.EndDate, s.StartDate)
+	}
+	return nil
+}
+
+// IsActive returns true if the sprint is currently active (today is within the sprint dates)
+func (s *Sprint) IsActive() bool {
+	now := time.Now()
+	return !s.StartDate.IsZero() && !s.EndDate.IsZero() &&
+		(now.Equal(s.StartDate) || now.After(s.StartDate)) &&
+		(now.Equal(s.EndDate) || now.Before(s.EndDate))
+}
+
+// Forecast represents an ETA prediction for a specific bead
+type Forecast struct {
+	BeadID     string    `json:"bead_id"`
+	ETADate    time.Time `json:"eta_date"`
+	Confidence float64   `json:"confidence"`
+	Factors    []string  `json:"factors,omitempty"`
+	CreatedAt  time.Time `json:"created_at,omitempty"`
+}
+
+// BurndownPoint represents a single point in a burndown chart
+type BurndownPoint struct {
+	Date      time.Time `json:"date"`
+	Remaining int       `json:"remaining"`
+	Completed int       `json:"completed"`
+}
