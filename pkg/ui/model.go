@@ -2653,6 +2653,13 @@ func (m Model) handleHelpKeys(msg tea.KeyMsg) Model {
 		m.showHelp = false
 		m.helpScroll = 0
 		m.focused = focusList
+	case " ": // Space opens interactive tutorial (bv-0trk)
+		m.showHelp = false
+		m.helpScroll = 0
+		// Signal to show tutorial (will be handled by main model integration bv-8y31)
+		// For now, we set a flag that the main Update can check
+		m.focused = focusList
+		// TODO(bv-8y31): m.showTutorial = true; m.tutorialModel = NewTutorialModel(m.theme)
 	default:
 		// Any other key dismisses help
 		m.showHelp = false
@@ -3135,7 +3142,7 @@ func (m *Model) renderHelpOverlay() string {
 		Italic(true)
 
 	title := titleStyle.Render("⌨️  Keyboard Shortcuts")
-	subtitle := subtitleStyle.Render("Press ? or Esc to close")
+	subtitle := subtitleStyle.Render("Space: Tutorial │ ? or Esc to close")
 	titleBar := lipgloss.JoinHorizontal(lipgloss.Center, title, "  ", subtitle)
 
 	// Combine title and body

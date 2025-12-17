@@ -921,4 +921,20 @@ func TestHelpOverlayScroll(t *testing.T) {
 	if !strings.Contains(out, "close") && !strings.Contains(out, "Esc") {
 		t.Fatalf("help overlay should show close hint")
 	}
+	// Should show tutorial hint (bv-0trk)
+	if !strings.Contains(out, "Tutorial") {
+		t.Fatalf("help overlay should show Tutorial hint")
+	}
+
+	// Test Space key closes help for tutorial entry (bv-0trk)
+	m.showHelp = true
+	m.focused = focusHelp
+	m.helpScroll = 5
+	m = m.handleHelpKeys(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	if m.showHelp {
+		t.Fatalf("expected showHelp=false after Space")
+	}
+	if m.helpScroll != 0 {
+		t.Fatalf("expected helpScroll=0 after Space, got %d", m.helpScroll)
+	}
 }
