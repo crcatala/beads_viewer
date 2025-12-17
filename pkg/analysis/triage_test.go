@@ -752,6 +752,30 @@ func TestGenerateTriageReasons_ClaimStatus(t *testing.T) {
 	if !foundClaimed {
 		t.Error("expected reason about being claimed by OtherAgent")
 	}
+
+	// In progress should not be described as unclaimed.
+	ctx3 := TriageReasonContext{
+		Issue: &model.Issue{
+			Status: model.StatusInProgress,
+		},
+	}
+	reasons3 := GenerateTriageReasons(ctx3)
+	for _, r := range reasons3.All {
+		if contains(r, "unclaimed") {
+			t.Fatalf("did not expect in-progress issue to be described as unclaimed; reasons=%v", reasons3.All)
+		}
+	}
+
+	foundInProgress := false
+	for _, r := range reasons3.All {
+		if contains(r, "In progress") {
+			foundInProgress = true
+			break
+		}
+	}
+	if !foundInProgress {
+		t.Fatalf("expected in-progress reason, got: %v", reasons3.All)
+	}
 }
 
 func TestGenerateTriageReasons_BlockedBy(t *testing.T) {

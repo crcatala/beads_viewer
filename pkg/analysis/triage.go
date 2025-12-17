@@ -1040,7 +1040,16 @@ func GenerateTriageReasons(ctx TriageReasonContext) TriageReasons {
 	}
 
 	// 6. Agent claim status
-	if ctx.ClaimedByAgent == "" {
+	isInProgress := ctx.Issue != nil && ctx.Issue.Status == model.StatusInProgress
+	if isInProgress {
+		if ctx.ClaimedByAgent != "" {
+			reason := fmt.Sprintf("👤 Claimed by %s", ctx.ClaimedByAgent)
+			reasons = append(reasons, reason)
+			actionHint = fmt.Sprintf("Contact %s if you want to help", ctx.ClaimedByAgent)
+		} else {
+			reasons = append(reasons, "🚧 In progress - already being worked")
+		}
+	} else if ctx.ClaimedByAgent == "" {
 		reasons = append(reasons, "✅ Currently unclaimed - available for work")
 	} else {
 		reason := fmt.Sprintf("👤 Claimed by %s", ctx.ClaimedByAgent)
