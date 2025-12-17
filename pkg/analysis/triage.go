@@ -541,7 +541,10 @@ func buildQuickWins(scores []ImpactScore, unblocksMap map[string][]string, limit
 
 	// Sort by quick win score
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].quickWinScore > candidates[j].quickWinScore
+		if candidates[i].quickWinScore != candidates[j].quickWinScore {
+			return candidates[i].quickWinScore > candidates[j].quickWinScore
+		}
+		return candidates[i].score.IssueID < candidates[j].score.IssueID
 	})
 
 	quickWins := make([]QuickWin, 0, limit)
