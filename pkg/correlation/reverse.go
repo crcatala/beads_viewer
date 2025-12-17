@@ -12,14 +12,14 @@ import (
 
 // CommitBeadResult represents the result of a commit-to-bead lookup.
 type CommitBeadResult struct {
-	CommitSHA    string         `json:"commit_sha"`
-	ShortSHA     string         `json:"short_sha"`
-	Message      string         `json:"message"`
-	Author       string         `json:"author"`
-	AuthorEmail  string         `json:"author_email"`
-	Timestamp    time.Time      `json:"timestamp"`
-	RelatedBeads []RelatedBead  `json:"related_beads"`
-	IsOrphan     bool           `json:"is_orphan"` // True if no beads found
+	CommitSHA    string        `json:"commit_sha"`
+	ShortSHA     string        `json:"short_sha"`
+	Message      string        `json:"message"`
+	Author       string        `json:"author"`
+	AuthorEmail  string        `json:"author_email"`
+	Timestamp    time.Time     `json:"timestamp"`
+	RelatedBeads []RelatedBead `json:"related_beads"`
+	IsOrphan     bool          `json:"is_orphan"` // True if no beads found
 }
 
 // RelatedBead represents a bead related to a commit.
@@ -35,9 +35,9 @@ type RelatedBead struct {
 // ReverseLookup provides reverse lookup from commits to beads.
 type ReverseLookup struct {
 	repoPath string
-	index    CommitIndex                  // SHA -> []BeadID
+	index    CommitIndex                   // SHA -> []BeadID
 	details  map[string][]CorrelatedCommit // SHA -> commits with full details
-	beads    map[string]BeadHistory       // BeadID -> history
+	beads    map[string]BeadHistory        // BeadID -> history
 }
 
 // NewReverseLookup creates a new reverse lookup from a history report.
@@ -68,7 +68,7 @@ func NewReverseLookupWithRepo(report *HistoryReport, repoPath string) *ReverseLo
 // LookupByCommit finds all beads related to a commit.
 func (rl *ReverseLookup) LookupByCommit(sha string) (*CommitBeadResult, error) {
 	// Normalize SHA (handle short SHAs)
-	fullSHA := rl.normalizeShaSHA(sha)
+	fullSHA := rl.normalizeSHA(sha)
 
 	result := &CommitBeadResult{
 		CommitSHA:    fullSHA,
@@ -147,8 +147,8 @@ func (rl *ReverseLookup) LookupByCommit(sha string) (*CommitBeadResult, error) {
 	return result, nil
 }
 
-// normalizeShaSHA tries to expand a short SHA to full SHA if found in index.
-func (rl *ReverseLookup) normalizeShaSHA(sha string) string {
+// normalizeSHA tries to expand a short SHA to full SHA if found in index.
+func (rl *ReverseLookup) normalizeSHA(sha string) string {
 	// Already in index
 	if _, ok := rl.index[sha]; ok {
 		return sha
@@ -171,7 +171,7 @@ func (rl *ReverseLookup) getCommitInfo(sha string) (*commitInfo, error) {
 		return nil, fmt.Errorf("no repo path configured")
 	}
 
-	cmd := exec.Command("git", "log", "-1", "--format=%H|%aI|%an|%ae|%s", sha)
+	cmd := exec.Command("git", "log", "-1", "--format="+gitLogHeaderFormat, sha)
 	cmd.Dir = rl.repoPath
 
 	out, err := cmd.Output()
@@ -180,23 +180,12 @@ func (rl *ReverseLookup) getCommitInfo(sha string) (*commitInfo, error) {
 	}
 
 	line := strings.TrimSpace(string(out))
-	parts := strings.SplitN(line, "|", 5)
-	if len(parts) != 5 {
-		return nil, fmt.Errorf("invalid git output format")
-	}
-
-	timestamp, err := time.Parse(time.RFC3339, parts[1])
+	info, err := parseCommitInfo(line)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp: %w", err)
+		return nil, fmt.Errorf("parse git log output: %w", err)
 	}
 
-	return &commitInfo{
-		SHA:         parts[0],
-		Message:     parts[4],
-		Author:      parts[2],
-		AuthorEmail: parts[3],
-		Timestamp:   timestamp,
-	}, nil
+	return &info, nil
 }
 
 // OrphanCommit represents a commit with no associated bead.
@@ -211,10 +200,10 @@ type OrphanCommit struct {
 
 // OrphanStats provides statistics about orphan commits.
 type OrphanStats struct {
-	TotalCommits   int     `json:"total_commits"`   // All code commits in period
-	OrphanCommits  int     `json:"orphan_commits"`  // Commits with no bead
+	TotalCommits   int     `json:"total_commits"`      // All code commits in period
+	OrphanCommits  int     `json:"orphan_commits"`     // Commits with no bead
 	CorrelatedCmts int     `json:"correlated_commits"` // Commits with at least one bead
-	OrphanRatio    float64 `json:"orphan_ratio"`    // orphan / total
+	OrphanRatio    float64 `json:"orphan_ratio"`       // orphan / total
 }
 
 // FindOrphanCommits finds commits that don't correlate to any bead.
@@ -259,7 +248,7 @@ func (rl *ReverseLookup) getAllCodeCommits(opts ExtractOptions) ([]OrphanCommit,
 	args := []string{
 		"log",
 		"--no-merges",
-		"--format=%H|%aI|%an|%ae|%s",
+		"--format=" + gitLogHeaderFormat,
 	}
 
 	// Add time filters
@@ -293,29 +282,26 @@ func (rl *ReverseLookup) getAllCodeCommits(opts ExtractOptions) ([]OrphanCommit,
 
 	var commits []OrphanCommit
 	scanner := bufio.NewScanner(bytes.NewReader(out))
+	buf := make([]byte, 64*1024)
+	scanner.Buffer(buf, gitLogMaxScanTokenSize)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
 
-		parts := strings.SplitN(line, "|", 5)
-		if len(parts) != 5 {
-			continue
-		}
-
-		timestamp, err := time.Parse(time.RFC3339, parts[1])
+		info, err := parseCommitInfo(line)
 		if err != nil {
 			continue
 		}
 
 		commits = append(commits, OrphanCommit{
-			SHA:         parts[0],
-			ShortSHA:    shortSHA(parts[0]),
-			Message:     parts[4],
-			Author:      parts[2],
-			AuthorEmail: parts[3],
-			Timestamp:   timestamp,
+			SHA:         info.SHA,
+			ShortSHA:    shortSHA(info.SHA),
+			Message:     info.Message,
+			Author:      info.Author,
+			AuthorEmail: info.AuthorEmail,
+			Timestamp:   info.Timestamp,
 		})
 	}
 

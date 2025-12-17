@@ -8,13 +8,13 @@ import (
 
 func TestParseGitLogOutput(t *testing.T) {
 	// Mock git log output with two commits
-	data := []byte(`abc123def456789012345678901234567890abcd|2025-01-15T10:00:00Z|Alice|alice@example.com|First commit
+	data := []byte(`abc123def456789012345678901234567890abcd` + "\x00" + `2025-01-15T10:00:00Z` + "\x00" + `Alice` + "\x00" + `alice@example.com` + "\x00" + `First commit
 
 diff --git a/.beads/beads.jsonl b/.beads/beads.jsonl
 --- a/.beads/beads.jsonl
 +++ b/.beads/beads.jsonl
 +{"id":"bv-001","title":"First bead","status":"open"}
-def456789012345678901234567890abcdef1234|2025-01-16T11:00:00Z|Bob|bob@example.com|Second commit
+def456789012345678901234567890abcdef1234` + "\x00" + `2025-01-16T11:00:00Z` + "\x00" + `Bob` + "\x00" + `bob@example.com` + "\x00" + `Second commit
 
 diff --git a/.beads/beads.jsonl b/.beads/beads.jsonl
 --- a/.beads/beads.jsonl
@@ -55,9 +55,11 @@ diff --git a/.beads/beads.jsonl b/.beads/beads.jsonl
 }
 
 func TestParseCommitInfo(t *testing.T) {
-	line := "abc123def456789012345678901234567890abcd|2025-01-15T10:30:00Z|Alice Smith|alice@example.com|feat: add login feature"
+
+	line := "abc123def456789012345678901234567890abcd" + "\x00" + "2025-01-15T10:30:00Z" + "\x00" + "Alice Smith" + "\x00" + "alice@example.com" + "\x00" + "feat: add login feature"
 
 	info, err := parseCommitInfo(line)
+
 	if err != nil {
 		t.Fatalf("parseCommitInfo failed: %v", err)
 	}
@@ -86,10 +88,9 @@ func TestParseCommitInfo_InvalidFormat(t *testing.T) {
 		name string
 		line string
 	}{
-		{"missing parts", "abc123def456789012345678901234567890abcd|2025-01-15"},
-		{"invalid timestamp", "abc123def456789012345678901234567890abcd|not-a-date|author|email|msg"},
+		{"missing parts", "abc123def456789012345678901234567890abcd" + "\x00" + "2025-01-15"},
+		{"invalid timestamp", "abc123def456789012345678901234567890abcd" + "\x00" + "not-a-date" + "\x00" + "author" + "\x00" + "email" + "\x00" + "msg"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parseCommitInfo(tt.line)
@@ -102,10 +103,10 @@ func TestParseCommitInfo_InvalidFormat(t *testing.T) {
 
 func TestParseBeadJSON(t *testing.T) {
 	tests := []struct {
-		name     string
-		json     string
-		wantID   string
-		wantOK   bool
+		name   string
+		json   string
+		wantID string
+		wantOK bool
 	}{
 		{
 			name:   "valid bead",
@@ -527,8 +528,6 @@ func TestNewExtractor(t *testing.T) {
 		t.Error("beadsFiles should not be empty")
 	}
 }
-
-
 
 func TestCalculateCycleTime_NoCreatedMilestone(t *testing.T) {
 	now := time.Now()

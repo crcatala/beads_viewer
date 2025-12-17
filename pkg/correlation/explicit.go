@@ -232,7 +232,7 @@ func (m *ExplicitMatcher) searchWithGrep(pattern string, opts ExtractOptions) ([
 		"log",
 		"--grep=" + pattern,
 		"-i", // Case insensitive
-		"--format=%H|%aI|%an|%ae|%s",
+		"--format=" + gitLogHeaderFormat,
 	}
 
 	// Add time filters
@@ -266,23 +266,20 @@ func (m *ExplicitMatcher) parseGrepOutput(data []byte, searchPattern string) ([]
 	var matches []ExplicitMatch
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
+	buf := make([]byte, 64*1024)
+	scanner.Buffer(buf, gitLogMaxScanTokenSize)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
 
-		parts := strings.SplitN(line, "|", 5)
-		if len(parts) != 5 {
-			continue
-		}
-
-		timestamp, err := time.Parse(time.RFC3339, parts[1])
+		info, err := parseCommitInfo(line)
 		if err != nil {
 			continue
 		}
 
-		message := parts[4]
+		message := info.Message
 
 		// Extract all IDs from this message
 		idMatches := m.ExtractIDsFromMessage(message)
@@ -307,11 +304,11 @@ func (m *ExplicitMatcher) parseGrepOutput(data []byte, searchPattern string) ([]
 
 		matches = append(matches, ExplicitMatch{
 			BeadID:      searchPattern,
-			CommitSHA:   parts[0],
+			CommitSHA:   info.SHA,
 			Message:     message,
-			Author:      parts[2],
-			AuthorEmail: parts[3],
-			Timestamp:   timestamp,
+			Author:      info.Author,
+			AuthorEmail: info.AuthorEmail,
+			Timestamp:   info.Timestamp,
 			MatchType:   matchType,
 			Confidence:  confidence,
 		})

@@ -59,7 +59,7 @@ func (t *TemporalCorrelator) FindCommitsInWindow(window TemporalWindow) ([]Corre
 		fmt.Sprintf("--author=%s", window.AuthorEmail),
 		fmt.Sprintf("--since=%s", window.Start.Format(time.RFC3339)),
 		fmt.Sprintf("--until=%s", window.End.Format(time.RFC3339)),
-		"--format=%H|%aI|%an|%ae|%s",
+		"--format=" + gitLogHeaderFormat,
 		"--no-merges",
 	}
 
@@ -81,18 +81,20 @@ func (t *TemporalCorrelator) FindCommitsInWindow(window TemporalWindow) ([]Corre
 	// Parse commits
 	var commits []CorrelatedCommit
 	scanner := bufio.NewScanner(bytes.NewReader(out))
+	buf := make([]byte, 64*1024)
+	scanner.Buffer(buf, gitLogMaxScanTokenSize)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
 
-		parts := strings.SplitN(line, "|", 5)
-		if len(parts) != 5 {
+		info, err := parseCommitInfo(line)
+		if err != nil {
 			continue
 		}
 
-		sha := parts[0]
+		sha := info.SHA
 
 		// Skip commits already correlated via higher-confidence methods
 		if t.seenCommits[sha] {
@@ -101,11 +103,6 @@ func (t *TemporalCorrelator) FindCommitsInWindow(window TemporalWindow) ([]Corre
 
 		// Skip commits that touch beads files (those are handled by co-commit extractor)
 		if t.touchesBeadsFile(sha) {
-			continue
-		}
-
-		timestamp, err := time.Parse(time.RFC3339, parts[1])
-		if err != nil {
 			continue
 		}
 
@@ -127,10 +124,10 @@ func (t *TemporalCorrelator) FindCommitsInWindow(window TemporalWindow) ([]Corre
 		commits = append(commits, CorrelatedCommit{
 			SHA:         sha,
 			ShortSHA:    shortSHA(sha),
-			Message:     parts[4],
-			Author:      parts[2],
-			AuthorEmail: parts[3],
-			Timestamp:   timestamp,
+			Message:     info.Message,
+			Author:      info.Author,
+			AuthorEmail: info.AuthorEmail,
+			Timestamp:   info.Timestamp,
 			Files:       files,
 			Method:      MethodTemporalAuthor,
 			Confidence:  confidence,

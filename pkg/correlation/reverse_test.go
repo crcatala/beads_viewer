@@ -275,15 +275,15 @@ func TestNormalizeSHA(t *testing.T) {
 		want  string
 	}{
 		{"abc123def456", "abc123def456"}, // Full SHA in index
-		{"abc123", "abc123def456"},        // Short prefix expands
-		{"def456", "def456ghi789"},        // Another short prefix
-		{"unknown", "unknown"},            // Unknown stays as-is
+		{"abc123", "abc123def456"},       // Short prefix expands
+		{"def456", "def456ghi789"},       // Another short prefix
+		{"unknown", "unknown"},           // Unknown stays as-is
 	}
 
 	for _, tt := range tests {
-		got := rl.normalizeShaSHA(tt.input)
+		got := rl.normalizeSHA(tt.input)
 		if got != tt.want {
-			t.Errorf("normalizeShaSHA(%q) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("normalizeSHA(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

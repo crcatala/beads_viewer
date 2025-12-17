@@ -54,7 +54,7 @@ func TestParseCommitHeader(t *testing.T) {
 	}{
 		{
 			name:    "valid header",
-			line:    "abc123def456789012345678901234567890abcd|2025-12-15T10:30:00-05:00|John Doe|john@example.com|Fix bug",
+			line:    "abc123def456789012345678901234567890abcd" + "\x00" + "2025-12-15T10:30:00-05:00" + "\x00" + "John Doe" + "\x00" + "john@example.com" + "\x00" + "Fix bug",
 			wantSHA: "abc123def456789012345678901234567890abcd",
 			wantErr: false,
 		},
@@ -66,7 +66,7 @@ func TestParseCommitHeader(t *testing.T) {
 		},
 		{
 			name:    "invalid timestamp",
-			line:    "abc123def456789012345678901234567890abcd|invalid|John|john@example.com|Fix",
+			line:    "abc123def456789012345678901234567890abcd" + "\x00" + "invalid" + "\x00" + "John" + "\x00" + "john@example.com" + "\x00" + "Fix",
 			wantSHA: "",
 			wantErr: true,
 		},
@@ -87,7 +87,7 @@ func TestParseCommitHeader(t *testing.T) {
 }
 
 func TestParseCommitHeader_ParsesAllFields(t *testing.T) {
-	line := "abc123def456789012345678901234567890abcd|2025-12-15T10:30:00-05:00|John Doe|john@example.com|Fix the bug in login"
+	line := "abc123def456789012345678901234567890abcd" + "\x00" + "2025-12-15T10:30:00-05:00" + "\x00" + "John Doe" + "\x00" + "john@example.com" + "\x00" + "Fix the bug in login"
 	info, err := parseCommitHeader(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -398,9 +398,9 @@ func TestProgressCallback_CalledDuringParsing(t *testing.T) {
 
 	// Create mock input with multiple commits
 	// This tests the parseStream function directly
-	input := strings.NewReader(`abc123def456789012345678901234567890abcd|2025-12-15T10:30:00Z|John|john@test.com|Commit 1
+	input := strings.NewReader(`abc123def456789012345678901234567890abcd` + "\x00" + `2025-12-15T10:30:00Z` + "\x00" + `John` + "\x00" + `john@test.com` + "\x00" + `Commit 1
 +{"id":"bv-1","status":"open"}
-def456abc123789012345678901234567890abcd|2025-12-15T10:31:00Z|Jane|jane@test.com|Commit 2
+def456abc123789012345678901234567890abcd` + "\x00" + `2025-12-15T10:31:00Z` + "\x00" + `Jane` + "\x00" + `jane@test.com` + "\x00" + `Commit 2
 +{"id":"bv-2","status":"open"}
 `)
 

@@ -122,9 +122,9 @@ func (e *Extractor) Extract(opts ExtractOptions) ([]BeadEvent, error) {
 func (e *Extractor) buildGitLogArgs(opts ExtractOptions) []string {
 	args := []string{
 		"log",
-		"-p",                         // Include patch/diff
-		"--follow",                   // Track renames; requires a single pathspec (handled below)
-		"--format=%H|%aI|%an|%ae|%s", // Custom format for commit info
+		"-p",                             // Include patch/diff
+		"--follow",                       // Track renames; requires a single pathspec (handled below)
+		"--format=" + gitLogHeaderFormat, // Custom format for commit info
 		"--",
 	}
 
@@ -169,7 +169,7 @@ func (e *Extractor) parseGitLogOutput(r io.Reader, filterBeadID string) ([]BeadE
 	scanner := bufio.NewScanner(r)
 
 	// Increase buffer size to handle long lines in diffs
-	const maxScanTokenSize = 1024 * 1024 // 1MB lines should be enough
+	const maxScanTokenSize = 10 * 1024 * 1024 // 10MB (match loader/stream limits)
 	buf := make([]byte, 64*1024)
 	scanner.Buffer(buf, maxScanTokenSize)
 
@@ -229,11 +229,11 @@ func (e *Extractor) parseGitLogOutput(r io.Reader, filterBeadID string) ([]BeadE
 }
 
 // commitPattern matches the start of a commit in our custom log format
-var commitPattern = regexp.MustCompile(`(?m)^[0-9a-f]{40}\|`)
+var commitPattern = regexp.MustCompile(`(?m)^[0-9a-f]{40}\x00`)
 
 // parseCommitInfo extracts commit metadata from the header line
 func parseCommitInfo(line string) (commitInfo, error) {
-	parts := strings.SplitN(line, "|", 5)
+	parts := strings.SplitN(line, "\x00", 5)
 	if len(parts) != 5 {
 		return commitInfo{}, fmt.Errorf("invalid commit format: %s", line)
 	}

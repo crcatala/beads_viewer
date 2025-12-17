@@ -36,7 +36,7 @@ func NewStreamExtractor(repoPath string) *StreamExtractor {
 			".beads/beads.base.jsonl",
 			".beads/issues.jsonl",
 		},
-		commitPattern: regexp.MustCompile(`^[0-9a-f]{40}\|`),
+		commitPattern: regexp.MustCompile(`^[0-9a-f]{40}\x00`),
 	}
 }
 
@@ -47,11 +47,11 @@ func (s *StreamExtractor) SetProgressCallback(cb ProgressCallback) {
 
 // StreamOptions controls streaming extraction behavior
 type StreamOptions struct {
-	Since       *time.Time     // Only commits after this time
-	Until       *time.Time     // Only commits before this time
-	ClosedSince *time.Time     // Only beads closed since this time (for skipping old closed beads)
-	Limit       int            // Max commits to process (0 = DefaultHistoryLimit)
-	BeadID      string         // Filter to single bead ID
+	Since       *time.Time // Only commits after this time
+	Until       *time.Time // Only commits before this time
+	ClosedSince *time.Time // Only beads closed since this time (for skipping old closed beads)
+	Limit       int        // Max commits to process (0 = DefaultHistoryLimit)
+	BeadID      string     // Filter to single bead ID
 	OnProgress  ProgressCallback
 }
 
@@ -139,7 +139,7 @@ func (s *StreamExtractor) buildStreamCommand(opts StreamOptions, limit int) *exe
 		"log",
 		"-p",
 		"--follow",
-		"--format=%H|%aI|%an|%ae|%s",
+		"--format=" + gitLogHeaderFormat,
 	}
 
 	if opts.Since != nil {
@@ -245,7 +245,7 @@ func (s *StreamExtractor) processCommitBuffer(buf *commitBuffer, filterBeadID st
 
 // parseCommitHeader extracts commit metadata from the header line
 func parseCommitHeader(line string) (commitInfo, error) {
-	parts := strings.SplitN(line, "|", 5)
+	parts := strings.SplitN(line, "\x00", 5)
 	if len(parts) != 5 {
 		return commitInfo{}, fmt.Errorf("invalid commit format: %s", line)
 	}

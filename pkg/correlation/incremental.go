@@ -72,9 +72,9 @@ func (ic *IncrementalCorrelator) GenerateReportWithDetails(beads []BeadInfo, opt
 			return nil, err
 		}
 		return &IncrementalUpdateResult{
-			Report:        report,
+			Report:         report,
 			WasIncremental: false,
-			RefreshReason: "failed to build cache key",
+			RefreshReason:  "failed to build cache key",
 		}, nil
 	}
 
@@ -84,7 +84,7 @@ func (ic *IncrementalCorrelator) GenerateReportWithDetails(beads []BeadInfo, opt
 		ic.hits++
 		ic.mu.Unlock()
 		return &IncrementalUpdateResult{
-			Report:        cached,
+			Report:         cached,
 			WasIncremental: true,
 			NewCommitCount: 0,
 		}, nil
@@ -251,7 +251,7 @@ func extractEventsFromCommits(extractor *Extractor, commitSHAs []string, filterB
 	args := []string{
 		"log",
 		"-p",
-		"--format=%H|%aI|%an|%ae|%s",
+		"--format=" + gitLogHeaderFormat,
 		"--no-walk",
 	}
 	args = append(args, commitSHAs...)
@@ -303,10 +303,10 @@ func mergeReports(existing *HistoryReport, beads []BeadInfo, newEvents []BeadEve
 	for _, bead := range beads {
 		if _, exists := histories[bead.ID]; !exists {
 			histories[bead.ID] = BeadHistory{
-				BeadID: bead.ID,
-				Title:  bead.Title,
-				Status: bead.Status,
-				Events: []BeadEvent{},
+				BeadID:  bead.ID,
+				Title:   bead.Title,
+				Status:  bead.Status,
+				Events:  []BeadEvent{},
 				Commits: []CorrelatedCommit{},
 			}
 		}
@@ -480,15 +480,15 @@ func (ic *IncrementalCorrelator) CacheStats() IncrementalCorrelatorStats {
 	}
 
 	return IncrementalCorrelatorStats{
-		Hits:            hits,
-		Misses:          misses,
-		HitRate:         hitRate,
+		Hits:               hits,
+		Misses:             misses,
+		HitRate:            hitRate,
 		IncrementalUpdates: increments,
-		FullRefreshes:   refreshes,
-		IncrementRate:   incrementRate,
-		CacheSize:       cacheStats.Size,
-		MaxSize:         cacheStats.MaxSize,
-		MaxAge:          cacheStats.MaxAge,
+		FullRefreshes:      refreshes,
+		IncrementRate:      incrementRate,
+		CacheSize:          cacheStats.Size,
+		MaxSize:            cacheStats.MaxSize,
+		MaxAge:             cacheStats.MaxAge,
 	}
 }
 
