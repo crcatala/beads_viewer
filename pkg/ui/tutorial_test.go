@@ -496,7 +496,7 @@ func TestDefaultTutorialPages(t *testing.T) {
 
 func TestTutorialViewProgressBar(t *testing.T) {
 	m := newTestTutorialModel()
-	m.SetSize(80, 24)
+	m.SetSize(100, 60) // Larger to ensure footer isn't clipped
 
 	view := m.View()
 
@@ -662,7 +662,7 @@ func TestTutorialMarkdownWithCodeBlocks(t *testing.T) {
 	m.SetSize(100, 60) // Larger to show more content
 
 	// Navigate to the "AI Agent Integration" page which has code blocks
-	m.JumpToPage(8) // Index 8 is "advanced-ai"
+	m.JumpToPage(12) // Index 12 is "advanced-ai" (after intro x4, concepts x5, views x3)
 
 	view := m.View()
 

@@ -350,5 +350,5 @@ const contextHelpGeneric = `## Quick Reference
   Enter     Select/open
 
 **Views**
-  1-5       Switch views
+  b/g/i/h   Switch views
   ;         Shortcuts sidebar`

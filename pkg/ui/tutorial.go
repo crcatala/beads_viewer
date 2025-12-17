@@ -309,6 +309,10 @@ func (m TutorialModel) renderHeader(page TutorialPage, totalPages int) string {
 	filledWidth := 0
 	if totalPages > 0 {
 		filledWidth = (pageNum * barWidth) / totalPages
+		// Ensure at least 1 filled bar when on any page
+		if filledWidth < 1 && pageNum > 0 {
+			filledWidth = 1
+		}
 	}
 	if filledWidth > barWidth {
 		filledWidth = barWidth
@@ -737,24 +741,37 @@ func defaultTutorialPages() []TutorialPage {
 		},
 
 		// =============================================================
-		// CORE CONCEPTS (placeholder - bv-sbib)
+		// CORE CONCEPTS (bv-sbib)
 		// =============================================================
 		{
 			ID:      "concepts-beads",
 			Title:   "What Are Beads?",
 			Section: "Core Concepts",
-			Content: `## What Are Beads?
-
-Each **bead** is an issue or task in your project:
-
-- **ID** - Unique identifier (e.g., ` + "`bv-abc123`" + `)
-- **Title** - Short description
-- **Status** - open, in_progress, blocked, closed
-- **Priority** - P0 (critical) to P4 (backlog)
-- **Type** - bug, feature, task, epic, chore
-- **Dependencies** - What blocks or is blocked by this
-
-> More detailed content coming in bv-sbib.`,
+			Content: conceptsBeadsContent,
+		},
+		{
+			ID:      "concepts-dependencies",
+			Title:   "Dependencies & Blocking",
+			Section: "Core Concepts",
+			Content: conceptsDependenciesContent,
+		},
+		{
+			ID:      "concepts-labels",
+			Title:   "Labels & Organization",
+			Section: "Core Concepts",
+			Content: conceptsLabelsContent,
+		},
+		{
+			ID:      "concepts-priorities",
+			Title:   "Priorities & Status",
+			Section: "Core Concepts",
+			Content: conceptsPrioritiesContent,
+		},
+		{
+			ID:      "concepts-graph",
+			Title:   "The Dependency Graph",
+			Section: "Core Concepts",
+			Content: conceptsGraphContent,
 		},
 
 		// =============================================================
@@ -857,7 +874,7 @@ See ` + "`AGENTS.md`" + ` for the complete AI integration guide.
 | **?** | Help overlay |
 | **q** | Quit |
 | **Esc** | Close/go back |
-| **1-5** | Switch views |
+| **b/g/i/h** | Switch views |
 
 ### Navigation
 | Key | Action |
@@ -987,11 +1004,11 @@ You're already running ` + "`bv`" + ` — you're ahead of the game!
 
 | Key | View |
 |-----|------|
-| **1** | List (default) |
-| **2** | Board (Kanban) |
-| **3** | Graph (dependencies) |
-| **4** | Labels |
-| **5** | History |
+| **Esc** | Return to List |
+| **b** | Board (Kanban) |
+| **g** | Graph (dependencies) |
+| **i** | Insights panel |
+| **h** | History |
 
 ### Getting Help
 
@@ -1008,6 +1025,307 @@ Try pressing **t** to see the Table of Contents for this tutorial.
 Or press **q** to exit and start exploring!
 
 > **Tip:** Press **?** anytime you need a quick reference.`
+
+// =============================================================================
+// CORE CONCEPTS CONTENT (bv-sbib)
+// =============================================================================
+
+// conceptsBeadsContent is Page 1 of the Core Concepts section.
+const conceptsBeadsContent = `## What Are Beads?
+
+A **bead** is an issue, task, or unit of work in your project. Think of your
+project's work as beads on a string — discrete items that together form
+the complete picture.
+
+### Anatomy of a Bead
+
+` + "```" + `
+┌─────────────────────────────────────────────────────────┐
+│ bv-abc123                               ← Unique ID     │
+├─────────────────────────────────────────────────────────┤
+│ Title: Fix authentication timeout                       │
+│ Type: bug                  Status: open                 │
+│ Priority: P1               Created: 2025-01-15          │
+├─────────────────────────────────────────────────────────┤
+│ Labels: auth, security, urgent                          │
+├─────────────────────────────────────────────────────────┤
+│ Description:                                            │
+│ Users report being logged out after 5 minutes...        │
+├─────────────────────────────────────────────────────────┤
+│ Dependencies:                                           │
+│   Blocks: bv-xyz789 (Production deploy)                 │
+│   Blocked-by: (none)                                    │
+└─────────────────────────────────────────────────────────┘
+` + "```" + `
+
+### Issue Types
+
+| Type | When to Use |
+|------|-------------|
+| **bug** | Something broken that needs fixing |
+| **feature** | New functionality to add |
+| **task** | General work item |
+| **epic** | Large initiative containing sub-tasks |
+| **chore** | Maintenance, cleanup, tech debt |
+| **docs** | Documentation work |
+
+### How Beads Are Stored
+
+Your issues live in ` + "`.beads/issues.jsonl`" + ` — a simple JSON Lines file:
+
+` + "```" + `json
+{"id":"bv-abc123","title":"Fix auth","type":"bug","priority":1,...}
+{"id":"bv-def456","title":"Add dark mode","type":"feature",...}
+` + "```" + `
+
+This means your issues are:
+- **Version controlled** — branch, merge, history
+- **Diffable** — see exactly what changed
+- **Greppable** — search with standard tools
+
+> Press **→** to continue.`
+
+// conceptsDependenciesContent is Page 2 of the Core Concepts section.
+const conceptsDependenciesContent = `## Dependencies & Blocking
+
+Not all work can happen in parallel. Some issues must wait for others.
+This is where **dependencies** come in.
+
+### The Relationship
+
+` + "```" + `
+    ┌───────────┐         ┌───────────┐
+    │  bv-abc1  │ ──────► │  bv-def2  │
+    │  (Auth)   │ blocks  │ (Deploy)  │
+    └───────────┘         └───────────┘
+
+    bv-abc1 BLOCKS bv-def2
+    bv-def2 is BLOCKED BY bv-abc1
+` + "```" + `
+
+In plain terms: **You can't deploy until auth is fixed.**
+
+### Visual Indicators
+
+Throughout bv, blocking relationships are shown:
+
+| Indicator | Meaning |
+|-----------|---------|
+| 🔴 | Blocked — waiting on something else |
+| 🟢 | Ready — no blockers, can start now |
+| **→** in detail | Shows what this issue blocks |
+| **←** in detail | Shows what blocks this issue |
+
+### The "Ready" Filter
+
+Press **r** in List view to filter to **ready** issues only:
+
+` + "```" + `
+  Ready = Open + Zero Blockers
+` + "```" + `
+
+This is your **actionable work queue**. These issues have no dependencies
+blocking them — you can start any of them right now.
+
+> **Tip:** Start your day with ` + "`bd ready`" + ` to see what you can tackle.
+
+### Adding Dependencies
+
+From the command line:
+
+` + "```bash\nbd dep add bv-def2 bv-abc1   # def2 depends on abc1\n```" + `
+
+This creates the blocking relationship shown above.
+
+> Press **→** to continue.`
+
+// conceptsLabelsContent is Page 3 of the Core Concepts section.
+const conceptsLabelsContent = `## Labels & Organization
+
+Labels provide **flexible categorization** that cuts across types
+and priorities. Use them for anything that doesn't fit elsewhere.
+
+### Common Label Patterns
+
+| Category | Example Labels |
+|----------|----------------|
+| **Area** | frontend, backend, api, database |
+| **Owner** | team-alpha, @alice, contractor |
+| **Scope** | mvp, v2, tech-debt, nice-to-have |
+| **State** | needs-review, blocked-external, waiting-response |
+
+### Multi-Label Support
+
+Issues can have multiple labels:
+
+` + "```" + `
+bv-abc123  [bug] [P1]  auth, security, needs-review
+` + "```" + `
+
+This issue is a high-priority auth bug that needs security review.
+
+### Working with Labels
+
+| Key | Action |
+|-----|--------|
+| **L** | Open label picker (apply labels) |
+| **Shift+L** | Filter by label |
+| **[** | Switch to Labels dashboard view |
+
+### Label Analytics
+
+The **Labels view** (press **[**) shows:
+- Issue count per label
+- Health indicators (stale issues, blockers)
+- Distribution across priorities
+
+` + "```" + `
+┌─────────────────────────────────────────┐
+│ Label         │ Open │ In Progress │ %  │
+├───────────────┼──────┼─────────────┼────┤
+│ frontend      │   12 │           3 │ 28%│
+│ backend       │    8 │           5 │ 24%│
+│ needs-review  │    6 │           0 │ 11%│
+└─────────────────────────────────────────┘
+` + "```" + `
+
+> **Tip:** Keep your label set small. Too many labels = no one uses them.
+
+> Press **→** to continue.`
+
+// conceptsPrioritiesContent is Page 4 of the Core Concepts section.
+const conceptsPrioritiesContent = `## Priorities & Status
+
+Every issue has a **priority** and a **status**. Together, they answer:
+"How important is this?" and "Where is it in the workflow?"
+
+### Priority Levels
+
+| Level | Meaning | Response Time |
+|-------|---------|---------------|
+| **P0** | Critical/emergency | Drop everything |
+| **P1** | High priority | This sprint/week |
+| **P2** | Medium priority | This cycle/month |
+| **P3** | Low priority | When you have time |
+| **P4** | Backlog | Someday/maybe |
+
+> **Guideline:** If everything is P0, nothing is P0.
+
+### Status Flow
+
+` + "```" + `
+   ┌──────┐     ┌─────────────┐     ┌────────┐
+   │ open │ ──► │ in_progress │ ──► │ closed │
+   └──────┘     └─────────────┘     └────────┘
+                      │
+                      ▼
+                ┌─────────┐
+                │ blocked │ (auto-detected from deps)
+                └─────────┘
+` + "```" + `
+
+| Status | When to Use |
+|--------|-------------|
+| **open** | New or not yet started |
+| **in_progress** | Actively being worked |
+| **blocked** | Waiting on dependencies |
+| **closed** | Complete or won't fix |
+
+### Priority in the UI
+
+The **Insights panel** (press **i**) calculates a priority score:
+
+` + "```" + `
+Priority Score = Base Priority + Blocking Factor + Freshness
+` + "```" + `
+
+- **Blocking Factor**: How many issues are waiting on this?
+- **Freshness**: How long since last update?
+
+This surfaces issues that are both important AND blocking other work.
+
+### Changing Priority/Status
+
+| Key | Action |
+|-----|--------|
+| **p** | Change priority |
+| **s** | Change status |
+
+Or from the command line:
+
+` + "```bash\nbd update bv-abc123 --priority=P1\nbd update bv-abc123 --status=in_progress\n```" + `
+
+> Press **→** to continue.`
+
+// conceptsGraphContent is Page 5 of the Core Concepts section.
+const conceptsGraphContent = `## The Dependency Graph
+
+Your issues form a **directed acyclic graph (DAG)**. That sounds complex,
+but the concept is simple: work flows in one direction, with no cycles.
+
+### Mental Model
+
+` + "```" + `
+                    ┌─────────┐
+                    │ bv-001  │  (Epic: User Auth)
+                    │  EPIC   │
+                    └────┬────┘
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+     ┌─────────┐   ┌─────────┐   ┌─────────┐
+     │ bv-002  │   │ bv-003  │   │ bv-004  │
+     │ Login   │   │ Signup  │   │ Reset   │
+     └────┬────┘   └────┬────┘   └─────────┘
+          │              │
+          ▼              ▼
+     ┌─────────┐   ┌─────────┐
+     │ bv-005  │   │ bv-006  │
+     │ Tests   │   │ Tests   │
+     └─────────┘   └─────────┘
+
+     Arrows flow DOWN toward what's blocked.
+` + "```" + `
+
+### Key Insights from the Graph
+
+1. **Root nodes** (no arrows in) — Can be started immediately
+2. **Leaf nodes** (no arrows out) — Nothing depends on them
+3. **High fan-out** — Completing this unblocks many items
+4. **Critical path** — The longest chain determines minimum time
+
+### Graph View (Press g)
+
+The **Graph view** visualizes these relationships:
+
+| Visual | Meaning |
+|--------|---------|
+| Node size | Priority (bigger = higher) |
+| Green node | Closed |
+| Blue node | In progress |
+| Red node | Blocked |
+| Arrow A→B | A blocks B |
+
+### Navigation in Graph View
+
+| Key | Action |
+|-----|--------|
+| **j/k** | Move between nodes vertically |
+| **h/l** | Move between siblings |
+| **f** | Focus on selected subgraph |
+| **Enter** | View selected issue |
+| **Esc** | Return to list |
+
+### Why This Matters
+
+The graph reveals:
+- **Bottlenecks**: One issue blocking many
+- **Parallel tracks**: Independent work streams
+- **Priority inversions**: Low-priority blocking high-priority
+
+> **Tip:** Use ` + "`bd blocked`" + ` to quickly see all blocked issues.
+
+> Press **→** to continue to Views & Navigation.`
 
 // =============================================================================
 // VIEWS & NAVIGATION CONTENT (bv-36wz)
