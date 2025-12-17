@@ -179,6 +179,42 @@ bv --robot-label-health | jq '.results.labels[] | select(.health_level == "criti
 Use bv instead of parsing beads.jsonl—it computes PageRank, critical paths, cycles, and parallel tracks deterministically.
 ```
 
+### Automatic Integration
+
+`bv` can automatically add the above instructions to your project's agent file:
+
+- **On first run**, bv checks for AGENTS.md (or similar files) and offers to inject the blurb if not present
+- Choose **"Yes"** to add the instructions, **"No"** to skip, or **"Don't ask again"** to remember your preference
+- Preferences are stored per-project in `~/.config/bv/agent-prompts/`
+
+**Supported Files** (checked in order):
+1. `AGENTS.md` (preferred)
+2. `CLAUDE.md`
+3. `agents.md`
+4. `claude.md`
+
+**Manual Control:**
+
+```bash
+bd agents --show              # Display current blurb content
+bd agents --check             # Check if blurb is present in agent file
+bd agents --add               # Add blurb to agent file
+bd agents --remove            # Remove blurb from agent file
+bd agents --clear-preference  # Reset the "don't ask again" preference
+```
+
+**Version Tracking:**
+
+The blurb uses HTML comment markers for version tracking:
+```
+<!-- bv-agent-instructions-v1 -->
+... content ...
+<!-- end-bv-agent-instructions -->
+```
+
+When a new version of the blurb is released, `bv` can detect the outdated version and offer to update it.
+
+---
 
 ## 📐 Architecture & Design
 
