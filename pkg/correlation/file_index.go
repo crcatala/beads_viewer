@@ -360,7 +360,7 @@ type AffectedBead struct {
 // ImpactAnalysis analyzes what beads might be affected if the given files are modified.
 func (fl *FileLookup) ImpactAnalysis(files []string) *ImpactResult {
 	result := &ImpactResult{
-		Files:         files,
+		Files:         []string{},
 		AffectedBeads: []AffectedBead{},
 		RiskLevel:     "low",
 		RiskScore:     0.0,
@@ -372,11 +372,26 @@ func (fl *FileLookup) ImpactAnalysis(files []string) *ImpactResult {
 		return result
 	}
 
-	normalizedFiles := make([]string, len(files))
-	for i, f := range files {
-		normalizedFiles[i] = normalizePath(f)
+	// Normalize, filter empty/whitespace strings, and deduplicate file paths
+	seen := make(map[string]bool)
+	normalizedFiles := make([]string, 0, len(files))
+	for _, f := range files {
+		norm := strings.TrimSpace(normalizePath(f))
+		if norm == "" {
+			continue // Skip empty or whitespace-only paths
+		}
+		if !seen[norm] {
+			seen[norm] = true
+			normalizedFiles = append(normalizedFiles, norm)
+		}
 	}
 
+	if len(normalizedFiles) == 0 {
+		result.Summary = "No valid files to analyze"
+		return result
+	}
+
+	result.Files = normalizedFiles
 	beadMap := make(map[string]*AffectedBead)
 	now := time.Now()
 
@@ -493,13 +508,13 @@ func (fl *FileLookup) ImpactAnalysis(files []string) *ImpactResult {
 	} else {
 		parts := []string{}
 		if inProgressCount > 0 {
-			parts = append(parts, fmt.Sprintf("%d bead(s) in progress", inProgressCount))
+			parts = append(parts, fmt.Sprintf("%d %s in progress", inProgressCount, pluralize(inProgressCount, "bead")))
 		}
 		if openCount > 0 {
-			parts = append(parts, fmt.Sprintf("%d open bead(s)", openCount))
+			parts = append(parts, fmt.Sprintf("%d open %s", openCount, pluralize(openCount, "bead")))
 		}
 		if recentClosedCount > 0 {
-			parts = append(parts, fmt.Sprintf("%d recently closed bead(s)", recentClosedCount))
+			parts = append(parts, fmt.Sprintf("%d recently closed %s", recentClosedCount, pluralize(recentClosedCount, "bead")))
 		}
 		prefix := "Found "
 		if inProgressCount > 0 {
@@ -535,4 +550,12 @@ func containsBeadRef(refs []BeadReference, beadID string) bool {
 		}
 	}
 	return false
+}
+
+// pluralize returns the singular or plural form of a word based on count.
+func pluralize(count int, singular string) string {
+	if count == 1 {
+		return singular
+	}
+	return singular + "s"
 }

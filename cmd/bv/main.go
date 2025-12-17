@@ -2794,7 +2794,7 @@ func main() {
 		output := ImpactOutput{
 			GeneratedAt:   time.Now(),
 			DataHash:      report.DataHash,
-			Files:         files,
+			Files:         impactResult.Files,
 			RiskLevel:     impactResult.RiskLevel,
 			RiskScore:     impactResult.RiskScore,
 			Summary:       impactResult.Summary,

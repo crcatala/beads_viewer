@@ -547,3 +547,51 @@ func TestImpactAnalysisRiskLevels(t *testing.T) {
 		t.Errorf("Expected low risk for old closed beads, got %q", result.RiskLevel)
 	}
 }
+
+func TestImpactAnalysisEmptyStringsFiltered(t *testing.T) {
+	lookup := NewFileLookup(nil)
+
+	// Empty strings should be filtered out
+	result := lookup.ImpactAnalysis([]string{"", "  ", ""})
+	if result.Summary != "No valid files to analyze" {
+		t.Errorf("Expected 'No valid files to analyze' for empty strings, got %q", result.Summary)
+	}
+}
+
+func TestImpactAnalysisDuplicatesRemoved(t *testing.T) {
+	now := time.Now()
+	report := &HistoryReport{
+		Histories: map[string]BeadHistory{
+			"bv-1": {
+				BeadID: "bv-1",
+				Title:  "Test bead",
+				Status: "open",
+				Commits: []CorrelatedCommit{
+					{
+						SHA:       "a",
+						ShortSHA:  "a",
+						Timestamp: now,
+						Files:     []FileChange{{Path: "test.go", Insertions: 10}},
+					},
+				},
+			},
+		},
+		CommitIndex: CommitIndex{"a": {"bv-1"}},
+	}
+
+	lookup := NewFileLookup(report)
+
+	// Pass same file twice - should only appear once in OverlapFiles
+	result := lookup.ImpactAnalysis([]string{"test.go", "test.go", "./test.go"})
+
+	if len(result.AffectedBeads) != 1 {
+		t.Fatalf("Expected 1 affected bead, got %d", len(result.AffectedBeads))
+	}
+
+	// OverlapFiles should only have one entry (duplicates removed)
+	if len(result.AffectedBeads[0].OverlapFiles) != 1 {
+		t.Errorf("Expected 1 overlap file (deduped), got %d: %v",
+			len(result.AffectedBeads[0].OverlapFiles),
+			result.AffectedBeads[0].OverlapFiles)
+	}
+}
