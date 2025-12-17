@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -2464,6 +2466,13 @@ func main() {
 
 		// Build burndown data
 		burndown := calculateBurndown(targetSprint, issues)
+		issueMap := make(map[string]model.Issue, len(issues))
+		for _, iss := range issues {
+			issueMap[iss.ID] = iss
+		}
+		if scopeChanges, err := computeSprintScopeChanges(cwd, targetSprint, issueMap, time.Now()); err == nil && len(scopeChanges) > 0 {
+			burndown.ScopeChanges = scopeChanges
+		}
 
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
@@ -4145,6 +4154,214 @@ type ScopeChangeEvent struct {
 	Action     string    `json:"action"` // "added" or "removed"
 }
 
+type sprintSnapshot struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	BeadIDs []string `json:"bead_ids,omitempty"`
+}
+
+type scopeCommit struct {
+	timestamp time.Time
+	events    []ScopeChangeEvent
+}
+
+func computeSprintScopeChanges(repoPath string, sprint *model.Sprint, issueMap map[string]model.Issue, now time.Time) ([]ScopeChangeEvent, error) {
+	if sprint == nil || sprint.ID == "" {
+		return nil, nil
+	}
+	if sprint.StartDate.IsZero() || sprint.EndDate.IsZero() {
+		return nil, nil
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		// Not a git repository (common for ad-hoc exports/tests); scope changes are optional.
+		return nil, nil
+	}
+
+	// Bound the history window to the sprint to keep this fast.
+	since := sprint.StartDate.AddDate(0, 0, -1)
+	until := sprint.EndDate
+	if until.After(now) {
+		until = now
+	}
+
+	args := []string{
+		"-c", "color.ui=false",
+		"log",
+		"-p",
+		"--format=%H%x00%aI",
+		fmt.Sprintf("--since=%s", since.Format(time.RFC3339)),
+		fmt.Sprintf("--until=%s", until.Format(time.RFC3339)),
+		"--",
+		filepath.ToSlash(filepath.Join(".beads", loader.SprintsFileName)),
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("git log %s: %w: %s", filepath.ToSlash(filepath.Join(".beads", loader.SprintsFileName)), err, bytes.TrimSpace(out))
+	}
+
+	var commits []scopeCommit
+	var currentTS time.Time
+	var haveCommit bool
+	var oldSnap, newSnap sprintSnapshot
+	var haveOld, haveNew bool
+
+	processCommit := func() {
+		if !haveCommit {
+			return
+		}
+
+		if haveOld && haveNew && oldSnap.ID == sprint.ID && newSnap.ID == sprint.ID {
+			added := setDifference(newSnap.BeadIDs, oldSnap.BeadIDs)
+			removed := setDifference(oldSnap.BeadIDs, newSnap.BeadIDs)
+			if len(added) == 0 && len(removed) == 0 {
+				return
+			}
+
+			sort.Strings(added)
+			sort.Strings(removed)
+
+			events := make([]ScopeChangeEvent, 0, len(added)+len(removed))
+			for _, id := range removed {
+				title := ""
+				if iss, ok := issueMap[id]; ok {
+					title = iss.Title
+				}
+				events = append(events, ScopeChangeEvent{
+					Date:       currentTS.UTC(),
+					IssueID:    id,
+					IssueTitle: title,
+					Action:     "removed",
+				})
+			}
+			for _, id := range added {
+				title := ""
+				if iss, ok := issueMap[id]; ok {
+					title = iss.Title
+				}
+				events = append(events, ScopeChangeEvent{
+					Date:       currentTS.UTC(),
+					IssueID:    id,
+					IssueTitle: title,
+					Action:     "added",
+				})
+			}
+
+			commits = append(commits, scopeCommit{
+				timestamp: currentTS.UTC(),
+				events:    events,
+			})
+		}
+	}
+
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	// Sprints JSONL lines can contain large bead ID lists; allow a generous buffer.
+	const maxCapacity = 10 * 1024 * 1024 // 10MB
+	scanner.Buffer(make([]byte, 64*1024), maxCapacity)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		sha, ts, ok := parseGitHeaderLine(line)
+		_ = sha // not currently used, but parsing validates header lines
+		if ok {
+			processCommit()
+
+			currentTS = ts
+			haveCommit = true
+			oldSnap, newSnap = sprintSnapshot{}, sprintSnapshot{}
+			haveOld, haveNew = false, false
+			continue
+		}
+
+		if !haveCommit {
+			continue
+		}
+
+		if strings.HasPrefix(line, "-{") {
+			if snap, ok := parseSprintJSONLine(strings.TrimPrefix(line, "-")); ok && snap.ID == sprint.ID {
+				oldSnap = snap
+				haveOld = true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "+{") {
+			if snap, ok := parseSprintJSONLine(strings.TrimPrefix(line, "+")); ok && snap.ID == sprint.ID {
+				newSnap = snap
+				haveNew = true
+			}
+			continue
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	processCommit()
+
+	if len(commits) == 0 {
+		return nil, nil
+	}
+
+	// git log returns newest first; output should be chronological.
+	for i, j := 0, len(commits)-1; i < j; i, j = i+1, j-1 {
+		commits[i], commits[j] = commits[j], commits[i]
+	}
+
+	var scopeChanges []ScopeChangeEvent
+	for _, c := range commits {
+		scopeChanges = append(scopeChanges, c.events...)
+	}
+
+	return scopeChanges, nil
+}
+
+func parseGitHeaderLine(line string) (sha string, ts time.Time, ok bool) {
+	parts := strings.SplitN(line, "\x00", 2)
+	if len(parts) != 2 {
+		return "", time.Time{}, false
+	}
+	if len(parts[0]) != 40 {
+		return "", time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(parts[1]))
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	return parts[0], parsed, true
+}
+
+func parseSprintJSONLine(line string) (sprintSnapshot, bool) {
+	var snap sprintSnapshot
+	if err := json.Unmarshal([]byte(line), &snap); err != nil {
+		return sprintSnapshot{}, false
+	}
+	if snap.ID == "" {
+		return sprintSnapshot{}, false
+	}
+	return snap, true
+}
+
+func setDifference(a, b []string) []string {
+	if len(a) == 0 {
+		return nil
+	}
+	mb := make(map[string]bool, len(b))
+	for _, v := range b {
+		mb[v] = true
+	}
+	var out []string
+	for _, v := range a {
+		if v == "" {
+			continue
+		}
+		if !mb[v] {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // calculateBurndown computes burndown data for a sprint (bv-159)
 func calculateBurndown(sprint *model.Sprint, issues []model.Issue) BurndownOutput {
 	return calculateBurndownAt(sprint, issues, time.Now())
@@ -4246,7 +4463,7 @@ func calculateBurndownAt(sprint *model.Sprint, issues []model.Issue, now time.Ti
 		OnTrack:           onTrack,
 		DailyPoints:       dailyPoints,
 		IdealLine:         idealLine,
-		ScopeChanges:      []ScopeChangeEvent{}, // TODO: Track scope changes via git history
+		ScopeChanges:      nil,
 	}
 }
 
