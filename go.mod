@@ -4,6 +4,8 @@ module github.com/Dicklesworthstone/beads_viewer
 // version available in common dev environments.
 go 1.25
 
+toolchain go1.25.5
+
 require (
 	git.sr.ht/~sbinet/gg v0.6.0
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b
@@ -50,7 +52,7 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
-	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )
