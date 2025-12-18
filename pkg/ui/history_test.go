@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -543,5 +544,816 @@ func TestHistoryModel_CycleConfidence(t *testing.T) {
 	h.CycleConfidence()
 	if h.GetMinConfidence() != 0 {
 		t.Errorf("confidence after fourth cycle = %f, want 0", h.GetMinConfidence())
+	}
+}
+
+// =============================================================================
+// VIEW MODE SWITCHING TESTS (bv-tl3n)
+// =============================================================================
+
+func TestHistoryModel_ToggleViewMode(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Initial mode is Bead mode
+	if h.IsGitMode() {
+		t.Error("initial mode should be Bead mode, not Git mode")
+	}
+
+	// Toggle to Git mode
+	h.ToggleViewMode()
+	if !h.IsGitMode() {
+		t.Error("should be in Git mode after toggle")
+	}
+
+	// Verify commit list was built
+	if len(h.commitList) == 0 {
+		t.Error("commitList should be built when switching to Git mode")
+	}
+
+	// Toggle back to Bead mode
+	h.ToggleViewMode()
+	if h.IsGitMode() {
+		t.Error("should be back in Bead mode after second toggle")
+	}
+}
+
+func TestHistoryModel_BuildCommitList(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Switch to Git mode to build commit list
+	h.ToggleViewMode()
+
+	// Should have commits from all beads
+	// Test data has: bv-1 with 2 commits, bv-2 with 1, bv-3 with 2
+	// abc123def456 is shared by bv-1 and bv-2
+	// Total unique commits: 4 (abc123, def456, ghi789, jkl012)
+	if len(h.commitList) < 1 {
+		t.Error("commitList should have commits")
+	}
+
+	// Verify commits have bead associations
+	for _, commit := range h.commitList {
+		if len(commit.BeadIDs) == 0 {
+			t.Errorf("commit %s should have at least one associated bead", commit.ShortSHA)
+		}
+	}
+}
+
+func TestHistoryModel_SelectedGitCommit(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// In bead mode, SelectedGitCommit returns nil
+	h.ToggleViewMode() // Switch to git mode
+
+	commit := h.SelectedGitCommit()
+	if commit == nil {
+		t.Fatal("SelectedGitCommit() should return a commit in git mode")
+	}
+
+	if commit.SHA == "" {
+		t.Error("SelectedGitCommit().SHA should not be empty")
+	}
+}
+
+func TestHistoryModel_SelectedRelatedBeadID(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+
+	beadID := h.SelectedRelatedBeadID()
+	if beadID == "" {
+		t.Error("SelectedRelatedBeadID() should return a bead ID")
+	}
+}
+
+// =============================================================================
+// GIT MODE NAVIGATION TESTS
+// =============================================================================
+
+func TestHistoryModel_MoveUpDownGit(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+	h.SetSize(100, 40)
+
+	h.ToggleViewMode() // Git mode
+
+	// Start at first commit
+	if h.selectedGitCommit != 0 {
+		t.Errorf("initial selectedGitCommit = %d, want 0", h.selectedGitCommit)
+	}
+
+	// Move down
+	h.MoveDownGit()
+	if h.selectedGitCommit != 1 {
+		t.Errorf("selectedGitCommit after MoveDownGit = %d, want 1", h.selectedGitCommit)
+	}
+
+	// Move up
+	h.MoveUpGit()
+	if h.selectedGitCommit != 0 {
+		t.Errorf("selectedGitCommit after MoveUpGit = %d, want 0", h.selectedGitCommit)
+	}
+
+	// Can't go below 0
+	h.MoveUpGit()
+	if h.selectedGitCommit != 0 {
+		t.Errorf("selectedGitCommit should stay at 0, got %d", h.selectedGitCommit)
+	}
+}
+
+func TestHistoryModel_NextPrevRelatedBead(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+
+	// Find a commit with multiple beads
+	var commitWithMultipleBeads int = -1
+	for i, commit := range h.commitList {
+		if len(commit.BeadIDs) >= 2 {
+			commitWithMultipleBeads = i
+			break
+		}
+	}
+
+	if commitWithMultipleBeads < 0 {
+		t.Skip("No commit with multiple beads for related bead navigation test")
+	}
+
+	h.selectedGitCommit = commitWithMultipleBeads
+	h.selectedRelatedBead = 0
+
+	// Move to next related bead
+	h.NextRelatedBead()
+	if h.selectedRelatedBead != 1 {
+		t.Errorf("selectedRelatedBead after NextRelatedBead = %d, want 1", h.selectedRelatedBead)
+	}
+
+	// Move back
+	h.PrevRelatedBead()
+	if h.selectedRelatedBead != 0 {
+		t.Errorf("selectedRelatedBead after PrevRelatedBead = %d, want 0", h.selectedRelatedBead)
+	}
+
+	// Can't go below 0
+	h.PrevRelatedBead()
+	if h.selectedRelatedBead != 0 {
+		t.Errorf("selectedRelatedBead should stay at 0, got %d", h.selectedRelatedBead)
+	}
+}
+
+// =============================================================================
+// SEARCH AND FILTER TESTS (bv-nkrj)
+// =============================================================================
+
+func TestHistoryModel_StartCancelSearch(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Initially search is inactive
+	if h.IsSearchActive() {
+		t.Error("search should not be active initially")
+	}
+
+	// Start search
+	h.StartSearch()
+	if !h.IsSearchActive() {
+		t.Error("search should be active after StartSearch()")
+	}
+
+	// Cancel search
+	h.CancelSearch()
+	if h.IsSearchActive() {
+		t.Error("search should not be active after CancelSearch()")
+	}
+}
+
+func TestHistoryModel_SearchQuery(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.StartSearch()
+
+	// Initially empty
+	if h.SearchQuery() != "" {
+		t.Error("search query should be empty initially")
+	}
+}
+
+func TestHistoryModel_GetSearchModeName(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	tests := []struct {
+		mode historySearchMode
+		want string
+	}{
+		{searchModeAll, "all"},
+		{searchModeCommit, "msg"},
+		{searchModeSHA, "sha"},
+		{searchModeBead, "bead"},
+		{searchModeAuthor, "author"},
+	}
+
+	for _, tt := range tests {
+		h.searchMode = tt.mode
+		if got := h.GetSearchModeName(); got != tt.want {
+			t.Errorf("GetSearchModeName() for mode %d = %q, want %q", tt.mode, got, tt.want)
+		}
+	}
+}
+
+func TestHistoryModel_StartSearchWithMode(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	modes := []historySearchMode{
+		searchModeCommit,
+		searchModeSHA,
+		searchModeBead,
+		searchModeAuthor,
+	}
+
+	for _, mode := range modes {
+		h.CancelSearch() // Reset
+		h.StartSearchWithMode(mode)
+
+		if !h.IsSearchActive() {
+			t.Errorf("search should be active after StartSearchWithMode(%d)", mode)
+		}
+		if h.searchMode != mode {
+			t.Errorf("searchMode after StartSearchWithMode(%d) = %d, want %d", mode, h.searchMode, mode)
+		}
+	}
+}
+
+func TestHistoryModel_ClearSearch(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.StartSearch()
+	h.searchInput.SetValue("test")
+
+	h.ClearSearch()
+
+	if h.SearchQuery() != "" {
+		t.Error("search query should be empty after ClearSearch()")
+	}
+	// Search mode should still be active (unlike CancelSearch)
+	if !h.IsSearchActive() {
+		t.Error("search should still be active after ClearSearch()")
+	}
+}
+
+func TestHistoryModel_GetFilteredCommitList(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+
+	// Without filter, should return full commit list
+	filtered := h.GetFilteredCommitList()
+	if len(filtered) != len(h.commitList) {
+		t.Errorf("GetFilteredCommitList() without filter should return full list")
+	}
+}
+
+// =============================================================================
+// LAYOUT CALCULATION TESTS (bv-xrfh)
+// =============================================================================
+
+func TestHistoryModel_DetermineLayout(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	tests := []struct {
+		width  int
+		layout historyLayout
+	}{
+		{80, layoutNarrow},      // < 100 = narrow
+		{99, layoutNarrow},      // < 100 = narrow
+		{100, layoutStandard},   // >= 100 < 150 = standard
+		{120, layoutStandard},   // >= 100 < 150 = standard
+		{149, layoutStandard},   // >= 100 < 150 = standard
+		{150, layoutWide},       // >= 150 = wide
+		{200, layoutWide},       // >= 150 = wide
+	}
+
+	for _, tt := range tests {
+		h.SetSize(tt.width, 40)
+		got := h.determineLayout()
+		if got != tt.layout {
+			t.Errorf("determineLayout() at width %d = %d, want %d", tt.width, got, tt.layout)
+		}
+	}
+}
+
+func TestHistoryModel_PaneCount(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Narrow width = 2 panes
+	h.SetSize(80, 40)
+	if h.paneCount() != 2 {
+		t.Errorf("paneCount() at narrow width = %d, want 2", h.paneCount())
+	}
+
+	// Standard width = 3 panes
+	h.SetSize(120, 40)
+	if h.paneCount() != 3 {
+		t.Errorf("paneCount() at standard width = %d, want 3", h.paneCount())
+	}
+
+	// Wide width = 3 panes
+	h.SetSize(160, 40)
+	if h.paneCount() != 3 {
+		t.Errorf("paneCount() at wide width = %d, want 3", h.paneCount())
+	}
+}
+
+func TestHistoryModel_ToggleFocusThreePane(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Set to 3-pane layout
+	h.SetSize(120, 40)
+
+	// Start at list
+	if h.focused != historyFocusList {
+		t.Errorf("initial focus = %d, want historyFocusList", h.focused)
+	}
+
+	// Toggle to middle
+	h.ToggleFocus()
+	if h.focused != historyFocusMiddle {
+		t.Errorf("focus after first toggle = %d, want historyFocusMiddle", h.focused)
+	}
+
+	// Toggle to detail
+	h.ToggleFocus()
+	if h.focused != historyFocusDetail {
+		t.Errorf("focus after second toggle = %d, want historyFocusDetail", h.focused)
+	}
+
+	// Toggle back to list
+	h.ToggleFocus()
+	if h.focused != historyFocusList {
+		t.Errorf("focus after third toggle = %d, want historyFocusList", h.focused)
+	}
+}
+
+func TestHistoryModel_ListHeight(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.SetSize(100, 40)
+	expected := 40 - 3 // height - header reserve
+	if h.listHeight() != expected {
+		t.Errorf("listHeight() = %d, want %d", h.listHeight(), expected)
+	}
+}
+
+// =============================================================================
+// HELPER FUNCTION TESTS
+// =============================================================================
+
+func TestAuthorInitials(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"John Doe", "JD"},
+		{"Alice", "AL"},
+		{"Bob Smith Jr", "BJ"},
+		{"", "??"},
+		{"X", "X"},
+		{"张三", "张三"}, // Unicode support
+	}
+
+	for _, tt := range tests {
+		got := authorInitials(tt.name)
+		if got != tt.want {
+			t.Errorf("authorInitials(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestRelativeTime(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		time     time.Time
+		contains string
+	}{
+		{now.Add(-30 * time.Second), "just now"},
+		{now.Add(-5 * time.Minute), "m ago"},
+		{now.Add(-3 * time.Hour), "h ago"},
+		{now.Add(-2 * 24 * time.Hour), "d ago"},
+		{now.Add(-2 * 7 * 24 * time.Hour), "w ago"},
+		{now.Add(-2 * 30 * 24 * time.Hour), "mo ago"},
+		{now.Add(-2 * 365 * 24 * time.Hour), "y ago"},
+	}
+
+	for _, tt := range tests {
+		got := relativeTime(tt.time)
+		if !strings.Contains(got, tt.contains) {
+			t.Errorf("relativeTime(%v) = %q, want to contain %q", tt.time, got, tt.contains)
+		}
+	}
+}
+
+func TestRelativeTimeFuture(t *testing.T) {
+	futureTime := time.Now().Add(1 * time.Hour)
+	got := relativeTime(futureTime)
+	if got != "in future" {
+		t.Errorf("relativeTime(future) = %q, want 'in future'", got)
+	}
+}
+
+func TestParseConventionalCommit(t *testing.T) {
+	tests := []struct {
+		msg            string
+		wantConv       bool
+		wantType       string
+		wantScope      string
+		wantBreaking   bool
+		wantSubject    string
+	}{
+		{"feat: add new feature", true, "feat", "", false, "add new feature"},
+		{"fix(auth): resolve login bug", true, "fix", "auth", false, "resolve login bug"},
+		{"feat!: breaking change", true, "feat", "", true, "breaking change"},
+		{"feat(api)!: breaking api change", true, "feat", "api", true, "breaking api change"},
+		{"chore: update deps", true, "chore", "", false, "update deps"},
+		{"regular commit message", false, "", "", false, "regular commit message"},
+		{"Merge branch 'main'", false, "", "", false, "Merge branch 'main'"},
+	}
+
+	for _, tt := range tests {
+		cc := parseConventionalCommit(tt.msg)
+		if cc.IsConventional != tt.wantConv {
+			t.Errorf("parseConventionalCommit(%q).IsConventional = %v, want %v",
+				tt.msg, cc.IsConventional, tt.wantConv)
+		}
+		if cc.Type != tt.wantType {
+			t.Errorf("parseConventionalCommit(%q).Type = %q, want %q",
+				tt.msg, cc.Type, tt.wantType)
+		}
+		if cc.Scope != tt.wantScope {
+			t.Errorf("parseConventionalCommit(%q).Scope = %q, want %q",
+				tt.msg, cc.Scope, tt.wantScope)
+		}
+		if cc.Breaking != tt.wantBreaking {
+			t.Errorf("parseConventionalCommit(%q).Breaking = %v, want %v",
+				tt.msg, cc.Breaking, tt.wantBreaking)
+		}
+	}
+}
+
+func TestCommitTypeIndicator(t *testing.T) {
+	tests := []struct {
+		msg  string
+		want string
+	}{
+		{"feat: new feature", "✨"},
+		{"fix: bug fix", "🐛"},
+		{"docs: update readme", "📝"},
+		{"refactor: clean up", "♻"},
+		{"test: add tests", "🧪"},
+		{"chore: update deps", "🔧"},
+		{"perf: optimize", "⚡"},
+		{"Merge branch 'main'", "⊕"},
+		{"Revert 'some commit'", "↩"},
+		{"regular message", ""},
+	}
+
+	for _, tt := range tests {
+		got := commitTypeIndicator(tt.msg)
+		if got != tt.want {
+			t.Errorf("commitTypeIndicator(%q) = %q, want %q", tt.msg, got, tt.want)
+		}
+	}
+}
+
+func TestFormatCycleTime(t *testing.T) {
+	tests := []struct {
+		days float64
+		want string
+	}{
+		{0.01, "14m"},      // < 1 hour
+		{0.1, "2.4h"},      // < 1 day
+		{2.5, "2.5d"},      // < 7 days
+		{10, "1.4w"},       // >= 7 days
+	}
+
+	for _, tt := range tests {
+		got := formatCycleTime(tt.days)
+		if !strings.HasSuffix(got, tt.want[len(tt.want)-1:]) {
+			t.Errorf("formatCycleTime(%v) = %q, expected similar to %q", tt.days, got, tt.want)
+		}
+	}
+}
+
+func TestFileActionIcon(t *testing.T) {
+	tests := []struct {
+		action string
+		want   string
+	}{
+		{"A", "+"},
+		{"D", "-"},
+		{"M", "~"},
+		{"R", "→"},
+		{"X", "?"},
+	}
+
+	for _, tt := range tests {
+		got := fileActionIcon(tt.action)
+		if got != tt.want {
+			t.Errorf("fileActionIcon(%q) = %q, want %q", tt.action, got, tt.want)
+		}
+	}
+}
+
+func TestGroupFilesByDirectory(t *testing.T) {
+	files := []correlation.FileChange{
+		{Path: "pkg/ui/model.go"},
+		{Path: "pkg/ui/view.go"},
+		{Path: "cmd/main.go"},
+		{Path: "README.md"},
+	}
+
+	groups := groupFilesByDirectory(files)
+
+	if len(groups) != 3 {
+		t.Errorf("groupFilesByDirectory returned %d groups, want 3", len(groups))
+	}
+
+	// First group should be pkg/ui with 2 files
+	pkgUIFound := false
+	for _, g := range groups {
+		if g.Dir == "pkg/ui" && len(g.Files) == 2 {
+			pkgUIFound = true
+			break
+		}
+	}
+	if !pkgUIFound {
+		t.Error("expected pkg/ui group with 2 files")
+	}
+}
+
+func TestEventTypeIcon(t *testing.T) {
+	tests := []struct {
+		et   correlation.EventType
+		want string
+	}{
+		{correlation.EventCreated, "🆕"},
+		{correlation.EventClaimed, "👤"},
+		{correlation.EventClosed, "✓"},
+		{correlation.EventReopened, "↺"},
+		{correlation.EventModified, "✎"},
+		{correlation.EventType("unknown"), "•"},
+	}
+
+	for _, tt := range tests {
+		got := eventTypeIcon(tt.et)
+		if got != tt.want {
+			t.Errorf("eventTypeIcon(%q) = %q, want %q", tt.et, got, tt.want)
+		}
+	}
+}
+
+func TestEventTypeLabel(t *testing.T) {
+	tests := []struct {
+		et   correlation.EventType
+		want string
+	}{
+		{correlation.EventCreated, "Created"},
+		{correlation.EventClaimed, "Claimed"},
+		{correlation.EventClosed, "Closed"},
+		{correlation.EventReopened, "Reopened"},
+		{correlation.EventModified, "Modified"},
+	}
+
+	for _, tt := range tests {
+		got := eventTypeLabel(tt.et)
+		if got != tt.want {
+			t.Errorf("eventTypeLabel(%q) = %q, want %q", tt.et, got, tt.want)
+		}
+	}
+}
+
+// =============================================================================
+// LAYOUT RENDERING TESTS
+// =============================================================================
+
+func TestHistoryModel_ViewNarrowLayout(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Narrow width (< 100)
+	h.SetSize(80, 24)
+	view := h.View()
+
+	if view == "" {
+		t.Error("View() with narrow layout returned empty")
+	}
+}
+
+func TestHistoryModel_ViewStandardLayout(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Standard width (100-150)
+	h.SetSize(120, 30)
+	view := h.View()
+
+	if view == "" {
+		t.Error("View() with standard layout returned empty")
+	}
+}
+
+func TestHistoryModel_ViewWideLayout(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Wide width (>= 150)
+	h.SetSize(160, 35)
+	view := h.View()
+
+	if view == "" {
+		t.Error("View() with wide layout returned empty")
+	}
+}
+
+func TestHistoryModel_ViewGitModeNarrow(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+	h.SetSize(80, 24)
+
+	view := h.View()
+	if view == "" {
+		t.Error("View() in Git mode with narrow layout returned empty")
+	}
+}
+
+func TestHistoryModel_ViewGitModeWide(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+	h.SetSize(160, 35)
+
+	view := h.View()
+	if view == "" {
+		t.Error("View() in Git mode with wide layout returned empty")
+	}
+}
+
+func TestHistoryModel_ViewNoCommitsInGitMode(t *testing.T) {
+	theme := testTheme()
+
+	// Create report with beads but no commits
+	emptyReport := &correlation.HistoryReport{
+		Histories: map[string]correlation.BeadHistory{
+			"bv-1": {BeadID: "bv-1", Title: "No commits", Commits: nil},
+		},
+	}
+	h := NewHistoryModel(emptyReport, theme)
+	h.SetSize(100, 30)
+	h.ToggleViewMode() // Git mode
+
+	view := h.View()
+	if view == "" {
+		t.Error("View() with no commits should show empty message")
+	}
+	if !strings.Contains(view, "No commits") {
+		t.Error("View() should indicate no commits with correlations")
+	}
+}
+
+func TestHistoryModel_EnsureBeadVisible(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Set very small height so scrolling is needed
+	h.SetSize(100, 8)
+
+	// Select last bead
+	h.selectedBead = len(h.histories) - 1
+	h.ensureBeadVisible()
+
+	// Scroll offset should be adjusted
+	if h.scrollOffset < 0 {
+		t.Error("scrollOffset should be >= 0")
+	}
+}
+
+func TestHistoryModel_EnsureGitCommitVisible(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	h.ToggleViewMode() // Git mode
+	h.SetSize(100, 8)
+
+	// Select last commit
+	if len(h.commitList) > 0 {
+		h.selectedGitCommit = len(h.commitList) - 1
+		h.ensureGitCommitVisible()
+
+		if h.gitScrollOffset < 0 {
+			t.Error("gitScrollOffset should be >= 0")
+		}
+	}
+}
+
+func TestHistoryModel_ToggleExpand(t *testing.T) {
+	report := createTestHistoryReport()
+	theme := testTheme()
+	h := NewHistoryModel(report, theme)
+
+	// Initially not expanded
+	if len(h.expandedBeads) != 0 {
+		t.Error("expandedBeads should be empty initially")
+	}
+
+	// Toggle expand
+	h.ToggleExpand()
+	beadID := h.SelectedBeadID()
+	if !h.expandedBeads[beadID] {
+		t.Error("bead should be expanded after ToggleExpand()")
+	}
+
+	// Toggle again to collapse
+	h.ToggleExpand()
+	if h.expandedBeads[beadID] {
+		t.Error("bead should be collapsed after second ToggleExpand()")
+	}
+}
+
+// =============================================================================
+// EDGE CASE TESTS
+// =============================================================================
+
+func TestHistoryModel_NavigationEmptyList(t *testing.T) {
+	theme := testTheme()
+
+	emptyReport := &correlation.HistoryReport{
+		Histories: map[string]correlation.BeadHistory{},
+	}
+	h := NewHistoryModel(emptyReport, theme)
+
+	// Should not panic
+	h.MoveUp()
+	h.MoveDown()
+	h.NextCommit()
+	h.PrevCommit()
+}
+
+func TestHistoryModel_GitModeEmptyCommitList(t *testing.T) {
+	theme := testTheme()
+
+	emptyReport := &correlation.HistoryReport{
+		Histories: map[string]correlation.BeadHistory{},
+	}
+	h := NewHistoryModel(emptyReport, theme)
+
+	h.ToggleViewMode() // Git mode
+
+	// Should not panic
+	h.MoveUpGit()
+	h.MoveDownGit()
+	h.NextRelatedBead()
+	h.PrevRelatedBead()
+
+	if h.SelectedGitCommit() != nil {
+		t.Error("SelectedGitCommit() should return nil for empty list")
 	}
 }
