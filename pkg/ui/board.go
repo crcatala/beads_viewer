@@ -186,6 +186,9 @@ func (b *BoardModel) SetIssues(issues []model.Issue) {
 	// Clear search state - stale matches could reference invalid positions (bv-yg39)
 	b.CancelSearch()
 
+	// Reset detail panel cache to force refresh if same issue is selected
+	b.lastDetailID = ""
+
 	// Sanitize selection to prevent out-of-bounds
 	for i := 0; i < 4; i++ {
 		if b.selectedRow[i] >= len(b.columns[i]) {
