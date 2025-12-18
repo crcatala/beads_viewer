@@ -308,6 +308,7 @@ Shows all labels with:
   Enter     Drill into label
   h         View label health
   g         Label graph analysis
+  Esc       Return to list
 
 **Filtering**
   /         Search labels`
