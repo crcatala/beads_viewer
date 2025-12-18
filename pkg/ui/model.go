@@ -1674,6 +1674,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusList
 					return m, nil
 				}
+				// Close label picker if open (bv-126 fix)
+				if m.showLabelPicker {
+					m.showLabelPicker = false
+					m.focused = focusList
+					return m, nil
+				}
 				// At main list - first ESC clears filters, second shows quit confirm
 				if m.hasActiveFilters() {
 					m.clearAllFilters()
