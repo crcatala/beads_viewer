@@ -1425,37 +1425,102 @@ Default weights: Explicit=0.5, Temporal=0.25, CoCommit=0.15, Path=0.10
 
 ### History View Layout
 
+The History View uses a **responsive three-pane layout** that adapts to terminal width:
+
+| Width | Layout |
+|-------|--------|
+| **< 100** | Single pane: List with inline details |
+| **100-160** | Two panes: List + Detail |
+| **> 160** | Three panes: List + Timeline + Detail |
+
+**Wide Terminal (3-pane) Layout:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  📜 HISTORY VIEW                                          [Bead Mode] [≥ 0.5]   │
+├───────────────────────┬───────────────────┬─────────────────────────────────────┤
+│  BEADS                │  TIMELINE         │  COMMIT DETAIL                      │
+│  ─────────────────    │  ─────────────    │  ─────────────────────────          │
+│ ▸ BV-123 (3 commits)  │    ┃              │  abc1234 - Fix auth race            │
+│   🎯 BV-456 (1)       │   ━╋━ Jan 15      │  Author: alice@example.com          │
+│   🔗 BV-789 (5)       │    ┃   ▪▪▪        │  Date:   2025-01-15 14:32           │
+│   📁 BV-100 (2)       │   ━╋━ Jan 14      │  Confidence: 0.85 (explicit)        │
+│                       │    ┃   ▪          │                                      │
+│                       │   ━╋━ Jan 13      │  Files changed:                      │
+│                       │    ┃   ▪▪▪▪▪      │    M pkg/auth/session.go            │
+└───────────────────────┴───────────────────┴─────────────────────────────────────┘
+```
+
+### Timeline Panel (`t` Toggle)
+
+Press `t` to show/hide the **Timeline Panel**—a visual density chart of project activity:
+
+- **Vertical axis**: Time (newest at top)
+- **Horizontal bars**: Activity density (commits per day)
+- **Bar magnitude**: ▪ = 1-2, ▪▪ = 3-5, ▪▪▪ = 6-10, ▪▪▪▪ = 11+
+- **Highlights**: Selected bead's commits are marked with `━`
+
+Click or navigate to a date to filter the view to that time period.
+
+### Causality Markers
+
+Each bead-commit correlation shows its **detection method** as a visual marker:
+
+| Marker | Meaning | Confidence |
+|--------|---------|------------|
+| **🎯 Direct** | Commit message explicitly mentions bead ID | High (0.8-1.0) |
+| **🔗 Temporal** | Commit falls within bead's active lifecycle | Medium (0.4-0.7) |
+| **📁 File** | Commit touches files associated with bead | Low (0.2-0.5) |
+
+### View Modes
+
+Press `v` to toggle between two view modes:
+
+| Mode | Shows | Use Case |
+|------|-------|----------|
+| **Bead Mode** (default) | Beads grouped with their correlated commits | "What commits relate to this task?" |
+| **Git Mode** | Commits chronologically with correlated beads | "What tasks did this commit touch?" |
+
+### File-Centric Drill-Down (`f` Key)
+
+Press `f` to switch to **File Mode**—a tree view of changed files grouped by directory:
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  📜 HISTORY VIEW                                      [Confidence ≥ 0.5]│
-├────────────────────────┬────────────────────────────────────────────────┤
-│  BEADS                 │  COMMIT DETAIL                                 │
-│  ─────────────────     │  ─────────────────────────────────────────     │
-│ ▸ BV-123 (3 commits)   │  abc1234 - Fix auth race condition             │
-│   BV-456 (1 commit)    │  Author: alice@example.com                     │
-│   BV-789 (5 commits)   │  Date:   2025-01-15 14:32:00                   │
-│   BV-100 (2 commits)   │  Confidence: 0.85 (explicit mention)           │
-│                        │                                                 │
-│                        │  Files changed:                                 │
-│                        │    M pkg/auth/session.go (+42, -18)            │
-│                        │    M pkg/auth/token.go (+15, -3)               │
-│                        │                                                 │
-│                        │  Commit message:                                │
-│                        │  > Fix race condition in session refresh.      │
-│                        │  > Closes BV-123.                              │
-└────────────────────────┴────────────────────────────────────────────────┘
+│  📁 FILE MODE                                              [12 files]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ▼ pkg/auth/                                                            │
+│      session.go       42 changes   BV-123, BV-456                       │
+│      token.go         18 changes   BV-123                               │
+│      middleware.go    8 changes    BV-789                               │
+│  ▼ pkg/api/                                                             │
+│      handler.go       25 changes   BV-100                               │
+│      routes.go        12 changes   BV-100, BV-456                       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+Navigate to a file and press `Enter` to see all beads and commits that touched it.
 
 ### History Navigation
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Move between beads |
-| `Tab` | Switch between bead list and commit detail |
-| `Enter` | Expand/collapse commit list |
+| **Navigation** | |
+| `j` / `k` | Move in primary pane (beads or commits) |
+| `J` / `K` | Move in secondary pane (commits or detail) |
+| `Tab` | Cycle focus: List → Timeline → Detail |
+| `Enter` | Expand/collapse or drill into selection |
+| **View Modes** | |
+| `v` | Toggle Bead Mode ↔ Git Mode |
+| `f` | Toggle File-centric drill-down |
+| `t` | Toggle Timeline panel visibility |
+| **Filtering** | |
 | `c` | Cycle confidence threshold (0.0 → 0.3 → 0.5 → 0.7) |
+| `/` | Search commits or beads |
+| **Actions** | |
 | `y` | Copy selected commit SHA to clipboard |
-| `h` / `Esc` | Exit history view |
+| `o` | Open commit in browser (GitHub/GitLab) |
+| `V` | Preview cass sessions for selected bead |
+| `Esc` | Return to list view |
 
 ### Robot Command: `--robot-history`
 
@@ -1493,6 +1558,296 @@ bv --robot-history --min-confidence 0.7     # High-confidence only
   }
 }
 ```
+
+---
+
+## 🔗 Correlation Analysis: Impact Network & Related Work
+
+Beyond simple bead-to-commit correlation, `bv` provides **deep analysis** of how beads relate to each other through shared code changes. This helps identify hidden dependencies, find related work, and understand the true impact of changes.
+
+### Impact Network Graph
+
+The Impact Network visualizes **implicit relationships** between beads based on:
+
+```mermaid
+graph LR
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e3f2fd', 'lineColor': '#90a4ae'}}}%%
+
+    subgraph connections ["🔗 Edge Types"]
+        SC["Shared Commit<br/><small>Same commit touches both beads</small>"]
+        SF["Shared File<br/><small>Both beads modify same files</small>"]
+        DEP["Dependency<br/><small>Explicit blocker relationship</small>"]
+    end
+
+    classDef edge fill:#fff8e1,stroke:#ffcc80,stroke-width:2px
+    class SC,SF,DEP edge
+```
+
+| Edge Type | Weight | Meaning |
+|-----------|--------|---------|
+| **Shared Commit** | High | A single commit references both beads (strong coupling) |
+| **Shared File** | Medium | Both beads touched the same source file |
+| **Dependency** | Explicit | Direct blocking relationship from issue tracker |
+
+### Network Clusters
+
+`bv` automatically detects **clusters** of tightly-connected beads using community detection:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🔗 IMPACT NETWORK                                        [3 clusters]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─── Cluster 1: Auth Module ───┐     ┌─── Cluster 2: API Layer ───┐   │
+│  │  BV-123 ←──→ BV-456          │     │  BV-789 ←──→ BV-100        │   │
+│  │    ↕           ↕              │     │    ↕                        │   │
+│  │  BV-321 ←──→ BV-654          │────→│  BV-111                     │   │
+│  └──────────────────────────────┘     └─────────────────────────────┘   │
+│                                                                         │
+│  Central bead: BV-123 (highest degree)                                 │
+│  Internal connectivity: 0.85 (tightly coupled)                         │
+│  External edges: 1 (to API layer cluster)                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### File-to-Bead Lookup
+
+Find all beads that have touched a specific file using `--robot-file-beads`:
+
+```bash
+bv --robot-file-beads pkg/ui/board.go
+```
+
+Returns beads sorted by recency with commit details:
+
+```json
+{
+  "file_path": "pkg/ui/board.go",
+  "total_beads": 21,
+  "open_beads": [],
+  "closed_beads": [
+    {
+      "bead_id": "bv-v67w",
+      "title": "Board: Integration & Polish",
+      "status": "closed",
+      "commit_shas": ["abc123"],
+      "last_touch": "2025-12-18T00:19:21-05:00",
+      "total_changes": 17
+    }
+  ]
+}
+```
+
+**Use cases:**
+- **Code ownership**: "Who has worked on this file recently?"
+- **Impact analysis**: "What work items are affected by this file?"
+- **Bug investigation**: "What changes might have introduced this regression?"
+
+### Orphan Commit Detection
+
+Find commits that should be linked to beads but aren't using `--robot-orphans`:
+
+```bash
+bv --robot-orphans
+```
+
+Returns candidate commits with probable bead matches:
+
+```json
+{
+  "stats": {
+    "total_commits": 500,
+    "correlated_count": 242,
+    "orphan_count": 258,
+    "orphan_ratio": 0.516
+  },
+  "candidates": [
+    {
+      "sha": "abc1234",
+      "message": "feat: add auth caching",
+      "suspicion_score": 100,
+      "probable_beads": [
+        {
+          "bead_id": "bv-xyz",
+          "confidence": 65,
+          "reasons": ["touches file pkg/auth/cache.go", "same author worked on bead nearby"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Use cases:**
+- **Hygiene**: Find commits that slipped through without proper linking
+- **Audit**: Ensure all code changes are tracked to work items
+- **Correlation improvement**: Train the system by confirming/rejecting suggestions
+
+### Related Work Discovery
+
+For any bead, `bv` can find **related work** across four dimensions:
+
+| Relation Type | How Detected | Example |
+|---------------|--------------|---------|
+| **File Overlap** | Both beads modify same source files | "BV-123 and BV-456 both touch `session.go`" |
+| **Commit Overlap** | Both beads referenced in same commit | "BV-123 and BV-456 fixed in commit `abc123`" |
+| **Dependency Cluster** | Both in same tightly-connected subgraph | "BV-123 is in the Auth cluster with BV-456" |
+| **Concurrent** | Active during the same time window | "BV-123 and BV-456 both worked on last week" |
+
+Each relation includes a **relevance score** (0-100) indicating strength.
+
+### Robot Commands
+
+```bash
+# Get the full impact network
+bv --robot-impact-network
+
+# Get network focused on specific bead (2-hop radius)
+bv --robot-impact-network --bead BV-123 --depth 2
+
+# Find related work for a bead
+bv --robot-related --bead BV-123
+
+# Get file co-change analysis
+bv --robot-cochange --file pkg/auth/session.go --threshold 0.5
+```
+
+**Impact Network Output Schema:**
+```json
+{
+  "generated_at": "2025-01-15T14:32:00Z",
+  "data_hash": "abc123...",
+  "stats": {
+    "total_nodes": 58,
+    "total_edges": 142,
+    "cluster_count": 5,
+    "avg_degree": 4.9,
+    "density": 0.086,
+    "isolated_nodes": 3
+  },
+  "clusters": [
+    {
+      "cluster_id": 1,
+      "bead_ids": ["BV-123", "BV-456", "BV-321"],
+      "label": "Auth Module",
+      "internal_connectivity": 0.85,
+      "central_bead": "BV-123",
+      "shared_files": ["pkg/auth/session.go", "pkg/auth/token.go"]
+    }
+  ],
+  "edges": [
+    {"from_bead": "BV-123", "to_bead": "BV-456", "edge_type": "shared_commit", "weight": 5}
+  ]
+}
+```
+
+---
+
+## 🤖 Cass Integration: AI Session Correlation (Optional)
+
+`bv` optionally integrates with [**cass**](https://github.com/Dicklesworthstone/cass) (Claude Agent Session Store)—a tool that captures and indexes coding sessions from AI assistants like Claude. When cass is installed, `bv` automatically enhances its correlation capabilities with session-based insights.
+
+### How It Works
+
+```mermaid
+graph LR
+    %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'lineColor': '#90a4ae'}}}%%
+
+    CASS["🤖 cass<br/><small>Session Store</small>"]
+    BV["⚡ bv<br/><small>Issue Viewer</small>"]
+    CORR["🔗 Enhanced<br/>Correlation"]
+
+    CASS --> BV
+    BV --> CORR
+
+    classDef tool fill:#e3f2fd,stroke:#90caf9,stroke-width:2px
+    class CASS,BV,CORR tool
+```
+
+**Graceful Degradation:** If cass is not installed, `bv` works normally—no errors, broken UI, or loading states. Cass features simply become unavailable.
+
+### Detection & Status
+
+`bv` automatically detects cass on startup:
+
+| Status | Indicator | Meaning |
+|--------|-----------|---------|
+| **Healthy** | 🤖 in status bar | cass is installed, indexed, and ready |
+| **Needs Index** | ⚠️ in status bar | cass installed but needs `cass index` |
+| **Not Installed** | (none) | cass not in PATH—features hidden |
+
+### Session Preview Modal (`V` Key)
+
+Press `V` on any bead to open the **Session Preview Modal**—a view of AI coding sessions that may have contributed to that issue:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🤖 Related Coding Sessions for BV-123                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ▸ Session 1 (claude-opus-4)                         Dec 15, 2:30 PM   │
+│    "Implementing session refresh timeout handling..."                   │
+│    Confidence: 0.92 (explicit mention)                                  │
+│                                                                         │
+│    Session 2 (claude-opus-4)                         Dec 14, 10:15 AM  │
+│    "Refactoring token validation middleware..."                         │
+│    Confidence: 0.67 (file overlap)                                      │
+│                                                                         │
+│    Session 3 (claude-opus-4)                         Dec 13, 4:45 PM   │
+│    "Adding retry logic to auth service..."                              │
+│    Confidence: 0.45 (temporal)                                          │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  j/k: Navigate   y: Copy search command   Enter: View full session      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Session Correlation Methods:**
+
+| Method | Weight | Meaning |
+|--------|--------|---------|
+| **Explicit** | 0.9-1.0 | Session mentions bead ID directly |
+| **File Overlap** | 0.5-0.8 | Session touched files associated with bead |
+| **Temporal** | 0.3-0.6 | Session occurred during bead's active lifecycle |
+| **Keyword** | 0.2-0.5 | Session contains keywords from bead title/description |
+
+### Status Bar Indicator
+
+When cass is healthy, the status bar shows agent activity:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  📋 437 issues  •  🤖 claude-opus-4 (active)  •  Last: 5m ago          │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+| State | Display | Meaning |
+|-------|---------|---------|
+| **Active** | 🤖 agent-name | Session in progress within last 15 minutes |
+| **Idle** | 💤 | No recent sessions |
+
+### Installing Cass
+
+```bash
+# Install cass (see https://github.com/Dicklesworthstone/cass for full docs)
+brew install dicklesworthstone/tap/cass   # macOS
+# or
+cargo install cass                         # From source
+
+# Index your coding sessions
+cass index
+
+# Verify integration
+bv  # Look for 🤖 in status bar
+```
+
+### Cass-Enhanced History View
+
+When cass is available, the History View gains additional capabilities:
+
+- **Session Timeline**: `V` key shows sessions alongside commits
+- **Agent Attribution**: See which AI assistant contributed to changes
+- **Enhanced Search**: Search across both commits and sessions
 
 ---
 
@@ -1719,34 +2074,99 @@ bv --preview-pages ./bv-pages                   # Serve at localhost:9000
 
 ```
 ./bv-pages/
-├── index.html              # Main dashboard
-├── beads.sqlite3           # Full-text searchable database
+├── index.html              # Main dashboard with Alpine.js + Tailwind
+├── beads.sqlite3           # Full SQLite database (~2MB for 400+ issues)
 ├── data/
-│   ├── issues.json         # Issue data
-│   ├── insights.json       # Graph metrics
-│   └── triage.json         # Triage recommendations
-└── assets/
-    ├── app.js              # Viewer application
-    └── styles.css          # Theme styles
+│   ├── graph_layout.json   # Pre-computed positions + metrics (~82KB)
+│   ├── meta.json           # Export metadata
+│   ├── triage.json         # Triage recommendations
+│   └── history.json        # Bead-commit correlation data
+└── vendor/
+    ├── d3.v7.min.js        # Visualization library
+    ├── force-graph.min.js  # Graph rendering
+    └── bv_graph.js         # WASM graph engine
 ```
+
+### Graph Visualization: 16x Faster Render
+
+The export uses a **hybrid architecture** for instant graph loading:
+
+| Component | Size | Purpose |
+|-----------|------|---------|
+| `graph_layout.json` | ~82KB | Pre-computed node positions + graph metrics |
+| `beads.sqlite3` | ~2MB | Full issue data for detail pane, search, tables |
+
+**How it works:**
+1. Browser loads tiny `graph_layout.json` first (~100ms over broadband)
+2. Graph renders instantly with pre-computed `fx`/`fy` fixed positions
+3. SQLite loads in parallel for search and detail functionality
+4. Force simulation is completely bypassed—no jittering, no layout delay
+
+**Performance comparison:**
+
+| Metric | Without Pre-compute | With Pre-compute |
+|--------|---------------------|------------------|
+| Initial load | 4+ seconds | ~250ms |
+| Force simulation | 2+ seconds | 0ms (skipped) |
+| Graph data | 914KB (redundant) | 82KB (compact) |
+
+### Detail Pane
+
+Click any node to open a **400px sliding detail pane**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                              │ ╭─────────────────────────╮          │
+│                              │ │ BV-123: Auth refactor   │          │
+│       [Interactive Graph]    │ │ ─────────────────────── │          │
+│                              │ │ Priority: P1 (High)     │          │
+│             ⬤               │ │ Type: Feature           │          │
+│            /│\               │ │ Status: In Progress     │          │
+│           / │ \              │ │                         │          │
+│          ⬤  ⬤  ⬤           │ │ **Description**         │          │
+│                              │ │ Refactor auth module... │          │
+│                              │ │                         │          │
+│                              │ │ ⛔ 3 blockers           │          │
+│                              │ │ 📤 blocks 5 issues      │          │
+│                              │ ╰─────────────────────────╯          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Detail pane includes:**
+- Full issue title and description (markdown rendered)
+- Priority, type, status with visual indicators
+- **Blockers count** ("⛔ 3 blockers")—issues that must complete first
+- **Blocks count** ("📤 blocks 5 issues")—downstream work waiting on this
+- PageRank, betweenness metrics (from pre-computed data)
 
 ### Features
 
-- **Full-Text Search**: SQLite FTS5 powers instant search across all issue titles and descriptions. Results appear as you type—no server required. The database is embedded directly in the static bundle.
-- **Interactive Graph**: Visualize dependencies (powered by D3.js)
+- **Full-Text Search**: SQLite FTS5 powers instant search across all issue titles and descriptions. Results appear as you type—no server required.
+- **Interactive Graph**: Visualize dependencies with D3.js force-graph, featuring zoom, pan, and node selection
+- **Detail Pane**: Click any node to see full issue details with dependency info
 - **Triage View**: Same recommendations as `--robot-triage`
 - **Offline Support**: Works without network after initial load
-- **Mobile Responsive**: Adapts to phone/tablet screens
+- **Mobile Responsive**: Adapts to phone/tablet screens with touch-friendly interactions
 
 ### Technical Notes
 
-The static export uses a pure-Go SQLite implementation ([modernc.org/sqlite](https://modernc.org/sqlite)), which means:
+The static export uses a **hybrid architecture** combining:
 
-- **No C compiler required**: The export works on any system without CGO or build tools
-- **Cross-platform**: Generate bundles on any OS for deployment anywhere
-- **FTS5 built-in**: Full-text search is available out of the box—no special configuration
+1. **Pure-Go SQLite** ([modernc.org/sqlite](https://modernc.org/sqlite)):
+   - No C compiler required—works on any system without CGO
+   - Cross-platform bundle generation
+   - FTS5 full-text search built-in
 
-The generated `beads.sqlite3` file contains a pre-indexed FTS5 table, enabling sub-millisecond search across thousands of issues.
+2. **Pre-computed Graph Layout**:
+   - BFS hierarchical layout with depth-based X positioning
+   - Node positions stored as `[x, y]` pairs
+   - Metrics stored as compact 5-element arrays: `[pagerank, betweenness, inDegree, outDegree, inCycle]`
+   - ~91% size reduction vs. full graph JSON
+
+3. **WASM Graph Engine** (`bv_graph.js`):
+   - Client-side cycle detection
+   - Efficient neighbor lookups
+   - Path finding for blocker chains
 
 ### Deployment Options
 
