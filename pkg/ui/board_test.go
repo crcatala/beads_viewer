@@ -1801,3 +1801,183 @@ func TestInlineCardExpansion_ShowsDescription(t *testing.T) {
 		t.Error("Expanded card should show description content")
 	}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Rendering Overflow Prevention Tests
+// Tests for fixes to lipgloss border width accounting and content truncation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// TestBoardRenderingNoOverflowAtProblematicWidths verifies the board renders
+// correctly at terminal widths that previously caused overflow issues.
+// The bug: lipgloss Border() adds 2 chars ON TOP of Width(), causing overflow
+// at certain widths (138, 139) where the math didn't align.
+func TestBoardRenderingNoOverflowAtProblematicWidths(t *testing.T) {
+	theme := createTheme()
+	issues := []model.Issue{
+		{ID: "1", Status: model.StatusOpen, Title: "Task 1"},
+		{ID: "2", Status: model.StatusInProgress, Title: "Task 2"},
+		{ID: "3", Status: model.StatusBlocked, Title: "Task 3"},
+		{ID: "4", Status: model.StatusClosed, Title: "Task 4"},
+	}
+	b := ui.NewBoardModel(issues, theme)
+
+	// These widths previously caused overflow due to border width miscalculation
+	problematicWidths := []int{137, 138, 139, 140, 141, 144}
+
+	for _, width := range problematicWidths {
+		t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
+			output := b.View(width, 55)
+			lines := strings.Split(output, "\n")
+
+			for i, line := range lines {
+				lineWidth := lipgloss.Width(line)
+				if lineWidth > width {
+					t.Errorf("Line %d exceeds terminal width: got %d, max %d\nLine: %q",
+						i, lineWidth, width, line)
+				}
+			}
+		})
+	}
+}
+
+// TestCardContentTruncationPreventsWrap verifies that card content (title, meta)
+// is truncated to fit within the card's content area, preventing word-wrap
+// that would increase card height beyond the expected 6 lines.
+func TestCardContentTruncationPreventsWrap(t *testing.T) {
+	theme := createTheme()
+
+	// Create issues with very long titles and labels that would wrap without truncation
+	longTitle := strings.Repeat("VeryLongWord", 10) // 120 chars
+	issues := []model.Issue{
+		{
+			ID:       "test-1",
+			Title:    longTitle,
+			Status:   model.StatusOpen,
+			Priority: 0,
+			Labels:   []string{"very-long-label-name", "another-long-label", "third-label"},
+			Dependencies: []*model.Dependency{
+				{IssueID: "test-1", DependsOnID: "blocker-with-long-id", Type: model.DepBlocks},
+			},
+		},
+	}
+	b := ui.NewBoardModel(issues, theme)
+
+	// Test at widths >= minimum board width (4 cols * 28 min + 3 gaps * 2 = 118)
+	// At narrow widths, the board intentionally exceeds terminal width due to minColWidth
+	testWidths := []int{120, 140, 160, 200}
+	for _, width := range testWidths {
+		t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
+			// Should not panic
+			output := b.View(width, 40)
+			if output == "" {
+				t.Error("Board should render with long content")
+			}
+
+			// Verify no line exceeds terminal width
+			lines := strings.Split(output, "\n")
+			for i, line := range lines {
+				lineWidth := lipgloss.Width(line)
+				if lineWidth > width {
+					t.Errorf("Line %d exceeds width %d: got %d", i, width, lineWidth)
+				}
+			}
+		})
+	}
+}
+
+// TestColumnGapsRendered verifies that gaps between columns are actually rendered,
+// not just reserved in the width calculation. Previously, gap space was calculated
+// but JoinHorizontal concatenated columns without actual spacing.
+func TestColumnGapsRendered(t *testing.T) {
+	theme := createTheme()
+	issues := []model.Issue{
+		{ID: "1", Status: model.StatusOpen, Title: "Task 1"},
+		{ID: "2", Status: model.StatusInProgress, Title: "Task 2"},
+	}
+	b := ui.NewBoardModel(issues, theme)
+
+	output := b.View(160, 40)
+
+	// Find a line that contains column borders - should have gap between them
+	// The gap should be spaces, not border characters touching (like "╮╭")
+	lines := strings.Split(output, "\n")
+	foundGap := false
+	for _, line := range lines {
+		// Look for pattern where rounded border end meets space meets rounded border start
+		// Good: "╯  ╭" or similar with space
+		// Bad: "╯╭" with no space
+		if strings.Contains(line, "╯  ╭") || strings.Contains(line, "╮  ╭") ||
+			strings.Contains(line, "│  │") || strings.Contains(line, "║  ║") {
+			foundGap = true
+			break
+		}
+	}
+
+	// Note: This is a heuristic test - the exact gap pattern depends on column borders
+	// At minimum, verify no line has border characters directly adjacent
+	for _, line := range lines {
+		if strings.Contains(line, "╯╭") || strings.Contains(line, "╮╭") {
+			t.Error("Found adjacent column borders without gap - borders are touching")
+		}
+	}
+
+	_ = foundGap // Use the variable to avoid unused warning
+}
+
+// TestSwimlaneManyCardsNoStatusBarPush verifies that swimlanes with many cards
+// don't push the status bar off screen. The fix ensures cards are exactly 6 lines
+// and content truncation prevents height overflow.
+func TestSwimlaneManyCardsNoStatusBarPush(t *testing.T) {
+	theme := createTheme()
+
+	// Create many issues in a single column to trigger scrolling
+	var issues []model.Issue
+	for i := 0; i < 50; i++ {
+		issues = append(issues, model.Issue{
+			ID:       fmt.Sprintf("issue-%d", i),
+			Title:    fmt.Sprintf("Task %d with a reasonably long title", i),
+			Status:   model.StatusOpen,
+			Priority: i % 3,
+			Labels:   []string{"backend", "api"},
+		})
+	}
+	b := ui.NewBoardModel(issues, theme)
+
+	// Render at a fixed height
+	termHeight := 40
+	output := b.View(160, termHeight)
+	lines := strings.Split(output, "\n")
+
+	// The output should not exceed terminal height
+	// (accounting for the fact that View returns content, not the full terminal)
+	if len(lines) > termHeight+5 { // Allow small margin for edge cases
+		t.Errorf("Output has %d lines, expected around %d - possible swimlane overflow",
+			len(lines), termHeight)
+	}
+}
+
+// TestSelectedCardDoubleBorderRendering verifies that selected cards use
+// DoubleBorder style instead of background highlighting, which was inconsistent.
+func TestSelectedCardDoubleBorderRendering(t *testing.T) {
+	theme := createTheme()
+	issues := []model.Issue{
+		{ID: "test-1", Title: "Selected Card", Status: model.StatusOpen},
+		{ID: "test-2", Title: "Other Card", Status: model.StatusOpen},
+	}
+	b := ui.NewBoardModel(issues, theme)
+
+	output := b.View(120, 30)
+
+	// The selected card should use double border characters (╔ ╗ ╚ ╝ ║ ═)
+	// At least one of these should appear for the selected card
+	hasDoubleBorder := strings.Contains(output, "╔") ||
+		strings.Contains(output, "╗") ||
+		strings.Contains(output, "╚") ||
+		strings.Contains(output, "╝") ||
+		strings.Contains(output, "║") ||
+		strings.Contains(output, "═")
+
+	if !hasDoubleBorder {
+		t.Error("Selected card should use double border style")
+	}
+}

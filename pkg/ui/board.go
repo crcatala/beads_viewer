@@ -965,14 +965,10 @@ func (b BoardModel) View(width, height int) string {
 
 		header := headerStyle.Render(headerText)
 
-		// Calculate visible rows (bv-1daf: 3 content lines)
-		// Card height breakdown:
-		// - 3 content lines (line1: meta, line2: title, line3: deps/labels)
-		// - 2 border lines (RoundedBorder adds top + bottom)
-		// - 1 margin line (MarginBottom(1))
-		// Total: 6 lines per card
+		// Card = 3 content + 2 border + 1 margin = 6 lines
 		cardHeight := 6
-		visibleCards := (colHeight - 1) / cardHeight
+		availableForCards := colHeight - 1 // reserve for scroll indicator
+		visibleCards := availableForCards / cardHeight
 		if visibleCards < 1 {
 			visibleCards = 1
 		}
@@ -1034,9 +1030,9 @@ func (b BoardModel) View(width, height int) string {
 		// Column content
 		content := lipgloss.JoinVertical(lipgloss.Left, cards...)
 
-		// Column container
+		// Column container (Width - 2 accounts for border)
 		colStyle := t.Renderer.NewStyle().
-			Width(baseWidth).
+			Width(baseWidth - 2).
 			Height(colHeight).
 			Padding(0, 1).
 			Border(lipgloss.RoundedBorder())
@@ -1048,6 +1044,10 @@ func (b BoardModel) View(width, height int) string {
 		}
 
 		column := lipgloss.JoinVertical(lipgloss.Center, header, colStyle.Render(content))
+
+		if i < len(b.activeColIdx)-1 {
+			column = t.Renderer.NewStyle().MarginRight(2).Render(column)
+		}
 		renderedCols = append(renderedCols, column)
 	}
 
@@ -1146,7 +1146,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	// CARD STYLING - Fixed 4-line height (bv-1daf) with blocking colors (bv-kklp)
 	// ══════════════════════════════════════════════════════════════════════════
 	cardStyle := t.Renderer.NewStyle().
-		Width(width).
+		Width(width - 2). // accounts for border
 		Padding(0, 1).
 		MarginBottom(1)
 
@@ -1175,15 +1175,12 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 
 	if selected {
 		cardStyle = cardStyle.
-			Background(t.Highlight).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor)
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(t.Primary)
 	} else if isCurrentMatch {
-		// Highlight current match with subtle background (bv-yg39)
 		cardStyle = cardStyle.
-			Background(lipgloss.AdaptiveColor{Light: "#e1bee7", Dark: "#4a148c"}).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor)
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#7b1fa2", Dark: "#ce93d8"})
 	} else {
 		cardStyle = cardStyle.
 			Border(lipgloss.RoundedBorder()).
@@ -1225,15 +1222,13 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 		t.Renderer.NewStyle().Bold(true).Foreground(t.Secondary).Render(displayID),
 		ageStyled,
 	)
+	contentWidth := width - 4 // border + padding
+	line1 = truncateRunesHelper(line1, max(contentWidth, 10), "…")
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// LINE 2: Title with full available width (bv-1daf)
 	// ══════════════════════════════════════════════════════════════════════════
-	titleWidth := width - 2
-	if titleWidth < 10 {
-		titleWidth = 10
-	}
-	truncatedTitle := truncateRunesHelper(issue.Title, titleWidth, "…")
+	truncatedTitle := truncateRunesHelper(issue.Title, max(contentWidth, 10), "…")
 
 	titleStyle := t.Renderer.NewStyle()
 	if selected {
@@ -1289,6 +1284,7 @@ func (b BoardModel) renderCard(issue model.Issue, width int, selected bool, colI
 	line3 := ""
 	if len(meta) > 0 {
 		line3 = strings.Join(meta, " ")
+		line3 = truncateRunesHelper(line3, max(contentWidth, 10), "…")
 	}
 
 	// Render card with 3 content lines (line4 removed to eliminate extra vertical gap)
@@ -1318,7 +1314,7 @@ func (b BoardModel) renderExpandedCard(issue model.Issue, width int, _, _ int) s
 	// CARD STYLING - Expanded card is always selected (since we expand selected)
 	// ══════════════════════════════════════════════════════════════════════════
 	cardStyle := t.Renderer.NewStyle().
-		Width(width).
+		Width(width - 2). // accounts for border
 		Padding(0, 1).
 		MarginBottom(1)
 
