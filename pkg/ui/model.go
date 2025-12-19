@@ -1623,8 +1623,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focused = focusHelp
 				m.helpScroll = 0 // Reset scroll position when opening help
 			} else {
-				m.focused = focusList
+				m.focused = m.restoreFocusFromHelp()
 			}
+			return m, nil
+		}
+
+		// If help is showing, any key (except ?/F1) dismisses it
+		if m.focused == focusHelp {
+			m.showHelp = false
+			m.focused = m.restoreFocusFromHelp()
 			return m, nil
 		}
 
@@ -1807,6 +1814,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// q closes current view or quits if at top level
 				if m.showDetails && !m.isSplitView {
 					m.showDetails = false
+					m.focused = focusList
 					return m, nil
 				}
 				if m.focused == focusInsights {
@@ -1837,6 +1845,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Escape closes modals and goes back
 				if m.showDetails && !m.isSplitView {
 					m.showDetails = false
+					m.focused = focusList
 					return m, nil
 				}
 				if m.focused == focusInsights {
@@ -2214,6 +2223,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.handleListKeys(msg)
 
 			case focusDetail:
+				// Handle detail view navigation (full-screen mobile mode)
+				if !m.isSplitView && m.showDetails {
+					switch msg.String() {
+					case "n", "]":
+						// Next issue
+						if m.list.Index() < len(m.list.Items())-1 {
+							m.list.Select(m.list.Index() + 1)
+							m.updateViewportContent()
+							m.viewport.GotoTop()
+						}
+						return m, nil
+					case "N", "[":
+						// Previous issue
+						if m.list.Index() > 0 {
+							m.list.Select(m.list.Index() - 1)
+							m.updateViewportContent()
+							m.viewport.GotoTop()
+						}
+						return m, nil
+					}
+				}
 				m.viewport, cmd = m.viewport.Update(msg)
 				cmds = append(cmds, cmd)
 			}
@@ -2357,6 +2387,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update viewport if list selection changed in split view
 	if m.isSplitView && m.focused == focusList {
 		m.updateViewportContent()
+		m.viewport.GotoTop() // Reset scroll when selecting a new issue
 	}
 
 	// Trigger async semantic computation if needed (debounced)
@@ -2376,6 +2407,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// restoreFocusFromHelp returns the appropriate focus based on current view state
+func (m Model) restoreFocusFromHelp() focus {
+	if m.showDetails && !m.isSplitView {
+		return focusDetail
+	}
+	if m.isGraphView {
+		return focusGraph
+	}
+	if m.isBoardView {
+		return focusBoard
+	}
+	if m.isActionableView {
+		return focusActionable
+	}
+	if m.focused == focusInsights {
+		return focusInsights
+	}
+	return focusList
 }
 
 // handleBoardKeys handles keyboard input when the board is focused (bv-yg39)
@@ -2557,13 +2608,14 @@ func (m Model) handleBoardKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isBoardView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -2598,13 +2650,14 @@ func (m Model) handleGraphKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isGraphView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -2628,13 +2681,14 @@ func (m Model) handleActionableKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isActionableView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -3151,13 +3205,14 @@ func (m Model) handleInsightsKeys(msg tea.KeyMsg) Model {
 					break
 				}
 			}
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -3169,7 +3224,9 @@ func (m Model) handleListKeys(msg tea.KeyMsg) Model {
 	case "enter":
 		if !m.isSplitView {
 			m.showDetails = true
+			m.focused = focusDetail // Allow viewport to receive scroll keys
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	case "home":
 		m.list.Select(0)
@@ -3689,6 +3746,8 @@ func (m *Model) renderHelpOverlay() string {
 		{"Ctrl+u", "Page up"},
 		{"Tab", "Switch focus"},
 		{"Enter", "View details"},
+		{"n / ]", "Next issue (detail view)"},
+		{"N / [", "Prev issue (detail view)"},
 		{"Esc", "Back / close"},
 	}
 
@@ -4623,7 +4682,7 @@ func (m *Model) renderFooter() string {
 		} else if m.isSplitView {
 			keyHints = append(keyHints, keyStyle.Render("tab")+" focus", keyStyle.Render("C")+" copy", keyStyle.Render("x")+" export", keyStyle.Render("?")+" help")
 		} else if m.showDetails {
-			keyHints = append(keyHints, keyStyle.Render("esc")+" back", keyStyle.Render("C")+" copy", keyStyle.Render("O")+" edit", keyStyle.Render("?")+" help")
+			keyHints = append(keyHints, keyStyle.Render("[")+` `+keyStyle.Render("]")+" cycle", keyStyle.Render("esc")+" back", keyStyle.Render("C")+" copy", keyStyle.Render("O")+" edit", keyStyle.Render("?")+" help")
 		} else {
 			keyHints = append(keyHints, keyStyle.Render("⏎")+" details", keyStyle.Render("t")+" diff", keyStyle.Render("S")+" triage", keyStyle.Render("l")+" labels", keyStyle.Render("?")+" help")
 			if m.workspaceMode {
