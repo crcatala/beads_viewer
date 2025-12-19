@@ -279,6 +279,7 @@ type Model struct {
 
 	// Focus and View State
 	focused                  focus
+	focusBeforeHelp          focus // Stored when help opens, restored when it closes
 	isSplitView              bool
 	isBoardView              bool
 	isGraphView              bool
@@ -1620,11 +1621,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if (msg.String() == "?" || msg.String() == "f1") && m.list.FilterState() != list.Filtering {
 			m.showHelp = !m.showHelp
 			if m.showHelp {
+				m.focusBeforeHelp = m.focused // Store current focus before switching to help
 				m.focused = focusHelp
 				m.helpScroll = 0 // Reset scroll position when opening help
 			} else {
-				m.focused = focusList
+				m.focused = m.focusBeforeHelp
 			}
+			return m, nil
+		}
+
+		// If help is showing, any key (except ?/F1) dismisses it
+		if m.focused == focusHelp {
+			m.showHelp = false
+			m.focused = m.focusBeforeHelp
 			return m, nil
 		}
 
