@@ -113,11 +113,15 @@ func TestHandleListKeysFiltersAndTimeTravelPrompt(t *testing.T) {
 		t.Fatalf("ctrl+u should move selection up")
 	}
 
-	// Enter should flip showDetails in mobile view
+	// Enter should flip showDetails in mobile view and focus the detail viewport
 	m.showDetails = false
+	m.focused = focusList
 	m = m.handleListKeys(tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.showDetails {
 		t.Fatalf("enter should show details when not split view")
+	}
+	if m.focused != focusDetail {
+		t.Fatalf("enter should focus detail viewport for scrolling, got focus=%d", m.focused)
 	}
 
 	// Time-travel prompt toggling

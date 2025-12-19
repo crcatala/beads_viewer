@@ -1807,6 +1807,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// q closes current view or quits if at top level
 				if m.showDetails && !m.isSplitView {
 					m.showDetails = false
+					m.focused = focusList
 					return m, nil
 				}
 				if m.focused == focusInsights {
@@ -1837,6 +1838,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Escape closes modals and goes back
 				if m.showDetails && !m.isSplitView {
 					m.showDetails = false
+					m.focused = focusList
 					return m, nil
 				}
 				if m.focused == focusInsights {
@@ -2357,6 +2359,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update viewport if list selection changed in split view
 	if m.isSplitView && m.focused == focusList {
 		m.updateViewportContent()
+		m.viewport.GotoTop() // Reset scroll when selecting a new issue
 	}
 
 	// Trigger async semantic computation if needed (debounced)
@@ -2557,13 +2560,14 @@ func (m Model) handleBoardKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isBoardView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -2598,13 +2602,14 @@ func (m Model) handleGraphKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isGraphView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -2628,13 +2633,14 @@ func (m Model) handleActionableKeys(msg tea.KeyMsg) Model {
 				}
 			}
 			m.isActionableView = false
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -3151,13 +3157,14 @@ func (m Model) handleInsightsKeys(msg tea.KeyMsg) Model {
 					break
 				}
 			}
-			m.focused = focusList
 			if m.isSplitView {
 				m.focused = focusDetail
 			} else {
 				m.showDetails = true
+				m.focused = focusDetail
 			}
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	}
 	return m
@@ -3169,7 +3176,9 @@ func (m Model) handleListKeys(msg tea.KeyMsg) Model {
 	case "enter":
 		if !m.isSplitView {
 			m.showDetails = true
+			m.focused = focusDetail // Allow viewport to receive scroll keys
 			m.updateViewportContent()
+			m.viewport.GotoTop()
 		}
 	case "home":
 		m.list.Select(0)
