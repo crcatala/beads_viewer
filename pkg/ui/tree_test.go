@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -493,5 +494,191 @@ func TestTreeTruncateTitle(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("truncateTitle(%q, %d) = %q, want %q", tt.title, tt.maxLen, got, tt.want)
 		}
+	}
+}
+
+// TestTreeJumpToParent verifies JumpToParent navigation
+func TestTreeJumpToParent(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "root", Title: "Root", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "child", Title: "Child", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "child", DependsOnID: "root", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Move to child
+	tree.MoveDown()
+	if tree.GetSelectedID() != "child" {
+		t.Fatalf("expected child selected, got %s", tree.GetSelectedID())
+	}
+
+	// Jump to parent
+	tree.JumpToParent()
+	if tree.GetSelectedID() != "root" {
+		t.Errorf("expected root after JumpToParent, got %s", tree.GetSelectedID())
+	}
+
+	// Jump to parent at root should do nothing
+	tree.JumpToParent()
+	if tree.GetSelectedID() != "root" {
+		t.Errorf("expected root to stay selected, got %s", tree.GetSelectedID())
+	}
+}
+
+// TestTreeExpandOrMoveToChild verifies → key behavior
+func TestTreeExpandOrMoveToChild(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "root", Title: "Root", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "child", Title: "Child", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "child", DependsOnID: "root", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Root is initially expanded (auto-expand depth < 2)
+	// ExpandOrMoveToChild should move to first child
+	tree.ExpandOrMoveToChild()
+	if tree.GetSelectedID() != "child" {
+		t.Errorf("expected child after ExpandOrMoveToChild on expanded node, got %s", tree.GetSelectedID())
+	}
+
+	// Go back to root
+	tree.JumpToTop()
+
+	// Collapse root first
+	tree.ToggleExpand()
+	if tree.NodeCount() != 1 {
+		t.Fatalf("expected 1 node after collapse, got %d", tree.NodeCount())
+	}
+
+	// Now ExpandOrMoveToChild should expand
+	tree.ExpandOrMoveToChild()
+	if tree.NodeCount() != 2 {
+		t.Errorf("expected 2 nodes after expand, got %d", tree.NodeCount())
+	}
+	// Cursor should still be on root
+	if tree.GetSelectedID() != "root" {
+		t.Errorf("expected cursor on root after expand, got %s", tree.GetSelectedID())
+	}
+}
+
+// TestTreeCollapseOrJumpToParent verifies ← key behavior
+func TestTreeCollapseOrJumpToParent(t *testing.T) {
+	now := time.Now()
+	issues := []model.Issue{
+		{ID: "root", Title: "Root", Priority: 1, IssueType: model.TypeEpic, CreatedAt: now},
+		{
+			ID: "child", Title: "Child", Priority: 2, IssueType: model.TypeTask, CreatedAt: now.Add(time.Hour),
+			Dependencies: []*model.Dependency{{IssueID: "child", DependsOnID: "root", Type: model.DepParentChild}},
+		},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Root is expanded - CollapseOrJumpToParent should collapse
+	tree.CollapseOrJumpToParent()
+	if tree.NodeCount() != 1 {
+		t.Errorf("expected 1 node after collapse, got %d", tree.NodeCount())
+	}
+
+	// Now root is collapsed - CollapseOrJumpToParent should do nothing (already at root)
+	tree.CollapseOrJumpToParent()
+	if tree.GetSelectedID() != "root" {
+		t.Errorf("expected cursor on root, got %s", tree.GetSelectedID())
+	}
+
+	// Expand and move to child
+	tree.ExpandOrMoveToChild() // expand
+	tree.ExpandOrMoveToChild() // move to child
+	if tree.GetSelectedID() != "child" {
+		t.Fatalf("expected child selected, got %s", tree.GetSelectedID())
+	}
+
+	// CollapseOrJumpToParent on leaf should jump to parent
+	tree.CollapseOrJumpToParent()
+	if tree.GetSelectedID() != "root" {
+		t.Errorf("expected root after jump to parent from leaf, got %s", tree.GetSelectedID())
+	}
+}
+
+// TestTreePageNavigation verifies PageUp/PageDown
+func TestTreePageNavigation(t *testing.T) {
+	// Create many issues for pagination testing
+	var issues []model.Issue
+	for i := 0; i < 20; i++ {
+		issues = append(issues, model.Issue{
+			ID:        fmt.Sprintf("issue-%d", i),
+			Title:     fmt.Sprintf("Issue %d", i),
+			Priority:  2,
+			IssueType: model.TypeTask,
+		})
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+	tree.SetSize(80, 10) // Height of 10 -> page size of 5
+
+	// PageDown
+	tree.PageDown()
+	if tree.cursor != 5 {
+		t.Errorf("expected cursor at 5 after PageDown, got %d", tree.cursor)
+	}
+
+	// PageDown again
+	tree.PageDown()
+	if tree.cursor != 10 {
+		t.Errorf("expected cursor at 10 after 2nd PageDown, got %d", tree.cursor)
+	}
+
+	// PageUp
+	tree.PageUp()
+	if tree.cursor != 5 {
+		t.Errorf("expected cursor at 5 after PageUp, got %d", tree.cursor)
+	}
+
+	// Jump to bottom and PageDown should stay at end
+	tree.JumpToBottom()
+	tree.PageDown()
+	if tree.cursor != 19 {
+		t.Errorf("expected cursor at 19 (end), got %d", tree.cursor)
+	}
+}
+
+// TestTreeSelectByID verifies cursor preservation by ID
+func TestTreeSelectByID(t *testing.T) {
+	issues := []model.Issue{
+		{ID: "first", Title: "First", Priority: 1, IssueType: model.TypeTask},
+		{ID: "second", Title: "Second", Priority: 2, IssueType: model.TypeTask},
+		{ID: "third", Title: "Third", Priority: 3, IssueType: model.TypeTask},
+	}
+
+	tree := NewTreeModel(newTreeTestTheme())
+	tree.Build(issues)
+
+	// Select middle issue
+	if !tree.SelectByID("second") {
+		t.Fatal("SelectByID failed to find 'second'")
+	}
+	if tree.GetSelectedID() != "second" {
+		t.Errorf("expected 'second' selected, got %s", tree.GetSelectedID())
+	}
+
+	// Try to select non-existent
+	if tree.SelectByID("nonexistent") {
+		t.Error("SelectByID should return false for non-existent ID")
+	}
+	// Cursor should remain unchanged
+	if tree.GetSelectedID() != "second" {
+		t.Errorf("cursor should not change after failed SelectByID, got %s", tree.GetSelectedID())
 	}
 }

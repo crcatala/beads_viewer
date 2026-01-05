@@ -190,6 +190,10 @@ func (t *TreeModel) sortNodes(nodes []*IssueTreeNode) {
 	}
 
 	sort.Slice(nodes, func(i, j int) bool {
+		// Defensive: check for nil nodes first
+		if nodes[i] == nil || nodes[j] == nil {
+			return nodes[i] != nil // Non-nil nodes first
+		}
 		a, b := nodes[i].Issue, nodes[j].Issue
 		if a == nil || b == nil {
 			return a != nil // Non-nil issues first
@@ -478,7 +482,9 @@ func (t *TreeModel) GetPriorityColor(priority int) lipgloss.AdaptiveColor {
 // SelectedIssue returns the currently selected issue, or nil if none.
 func (t *TreeModel) SelectedIssue() *model.Issue {
 	if t.cursor >= 0 && t.cursor < len(t.flatList) {
-		return t.flatList[t.cursor].Issue
+		if node := t.flatList[t.cursor]; node != nil {
+			return node.Issue
+		}
 	}
 	return nil
 }
@@ -492,7 +498,6 @@ func (t *TreeModel) SelectedNode() *IssueTreeNode {
 }
 
 // MoveDown moves the cursor down in the flat list.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) MoveDown() {
 	if t.cursor < len(t.flatList)-1 {
 		t.cursor++
@@ -500,7 +505,6 @@ func (t *TreeModel) MoveDown() {
 }
 
 // MoveUp moves the cursor up in the flat list.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) MoveUp() {
 	if t.cursor > 0 {
 		t.cursor--
@@ -508,7 +512,6 @@ func (t *TreeModel) MoveUp() {
 }
 
 // ToggleExpand expands or collapses the currently selected node.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) ToggleExpand() {
 	node := t.SelectedNode()
 	if node != nil && len(node.Children) > 0 {
@@ -518,7 +521,6 @@ func (t *TreeModel) ToggleExpand() {
 }
 
 // ExpandAll expands all nodes in the tree.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) ExpandAll() {
 	for _, root := range t.roots {
 		t.setExpandedRecursive(root, true)
@@ -527,7 +529,6 @@ func (t *TreeModel) ExpandAll() {
 }
 
 // CollapseAll collapses all nodes in the tree.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) CollapseAll() {
 	for _, root := range t.roots {
 		t.setExpandedRecursive(root, false)
@@ -547,6 +548,116 @@ func (t *TreeModel) JumpToBottom() {
 	}
 }
 
+// JumpToParent moves cursor to the parent of the currently selected node.
+// If already at a root node, does nothing.
+func (t *TreeModel) JumpToParent() {
+	node := t.SelectedNode()
+	if node == nil || node.Parent == nil {
+		return // No node selected or already at root
+	}
+
+	// Find parent in flatList
+	for i, n := range t.flatList {
+		if n == node.Parent {
+			t.cursor = i
+			return
+		}
+	}
+}
+
+// ExpandOrMoveToChild handles the → / l key:
+// - If node has children and is collapsed: expand it
+// - If node has children and is expanded: move to first child
+// - If node is a leaf: do nothing
+func (t *TreeModel) ExpandOrMoveToChild() {
+	node := t.SelectedNode()
+	if node == nil || len(node.Children) == 0 {
+		return // No node selected or leaf node
+	}
+
+	if !node.Expanded {
+		// Expand the node
+		node.Expanded = true
+		t.rebuildFlatList()
+	} else {
+		// Move to first child
+		// Find first child in flatList (should be right after current node)
+		for i, n := range t.flatList {
+			if n == node.Children[0] {
+				t.cursor = i
+				return
+			}
+		}
+	}
+}
+
+// CollapseOrJumpToParent handles the ← / h key:
+// - If node has children and is expanded: collapse it
+// - If node is collapsed or is a leaf: jump to parent
+func (t *TreeModel) CollapseOrJumpToParent() {
+	node := t.SelectedNode()
+	if node == nil {
+		return
+	}
+
+	if len(node.Children) > 0 && node.Expanded {
+		// Collapse the node
+		node.Expanded = false
+		t.rebuildFlatList()
+	} else {
+		// Jump to parent
+		t.JumpToParent()
+	}
+}
+
+// PageDown moves cursor down by half a viewport.
+func (t *TreeModel) PageDown() {
+	pageSize := t.height / 2
+	if pageSize < 1 {
+		pageSize = 5
+	}
+	t.cursor += pageSize
+	if t.cursor >= len(t.flatList) {
+		t.cursor = len(t.flatList) - 1
+	}
+	if t.cursor < 0 {
+		t.cursor = 0
+	}
+}
+
+// PageUp moves cursor up by half a viewport.
+func (t *TreeModel) PageUp() {
+	pageSize := t.height / 2
+	if pageSize < 1 {
+		pageSize = 5
+	}
+	t.cursor -= pageSize
+	if t.cursor < 0 {
+		t.cursor = 0
+	}
+}
+
+// SelectByID moves cursor to the node with the given issue ID.
+// Returns true if found, false otherwise.
+// Useful for preserving cursor position after rebuild.
+func (t *TreeModel) SelectByID(id string) bool {
+	for i, node := range t.flatList {
+		if node != nil && node.Issue != nil && node.Issue.ID == id {
+			t.cursor = i
+			return true
+		}
+	}
+	return false
+}
+
+// GetSelectedID returns the ID of the currently selected issue, or empty string.
+func (t *TreeModel) GetSelectedID() string {
+	if issue := t.SelectedIssue(); issue != nil {
+		return issue.ID
+	}
+	return ""
+}
+
 // setExpandedRecursive sets the expanded state for a node and all descendants.
 func (t *TreeModel) setExpandedRecursive(node *IssueTreeNode, expanded bool) {
 	if node == nil {
@@ -559,7 +670,6 @@ func (t *TreeModel) setExpandedRecursive(node *IssueTreeNode, expanded bool) {
 }
 
 // rebuildFlatList rebuilds the flattened list of visible nodes.
-// Placeholder - actual implementation in bv-2fpk.
 func (t *TreeModel) rebuildFlatList() {
 	t.flatList = t.flatList[:0]
 	for _, root := range t.roots {
