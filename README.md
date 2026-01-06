@@ -1473,6 +1473,369 @@ Both views complement each other: use Tree View to understand structure, Graph V
 
 ---
 
+## 🎯 Actionable Plan View: Parallel Execution Tracks
+
+Press `a` to open the **Actionable Plan View**—a structured display of work items grouped into independent execution tracks. This view transforms abstract graph analysis into a concrete "what to work on next" interface.
+
+### Why Tracks Matter
+
+Traditional priority lists show tasks in a single ordered queue. But in complex dependency graphs, some work streams are completely independent—working on one doesn't affect another. The Actionable Plan View identifies these **parallel tracks** using Union-Find connected component analysis, letting multiple agents or team members work concurrently without stepping on each other.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🎯 ACTIONABLE PLAN                                      3 tracks · 8 items  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ━━━ Track A: Auth System ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│  ▸ 🎯 P1 AUTH-001   Implement OAuth2 flow                    unblocks 3    │
+│    ✨ P2 AUTH-002   Add token refresh                        unblocks 1    │
+│                                                                             │
+│  ━━━ Track B: UI Polish ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│    📝 P2 UI-101     Dark mode toggle                         unblocks 2    │
+│    📝 P3 UI-102     Responsive layout                        unblocks 0    │
+│                                                                             │
+│  ━━━ Track C: Independent ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                             │
+│    📝 P3 DOCS-001   Update API documentation                 unblocks 0    │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Highest Impact: AUTH-001 (unblocks 3)                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### What Makes an Item "Actionable"
+
+An issue appears in the Actionable Plan when:
+1. **Status is open or in_progress** (not closed)
+2. **No open blockers** exist (all blocking dependencies are closed)
+
+This ensures every item in the view can be started immediately without waiting on anything else.
+
+### Unblock Analysis
+
+Each item shows an **unblocks count**—the number of other issues that would become actionable if this item were completed. High unblock counts indicate **force multipliers**: completing them unlocks a cascade of downstream work.
+
+The **Highest Impact** summary at the bottom identifies the single item that, when completed, unblocks the most additional work. This is your optimal "next thing to pick up."
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between items (across tracks) |
+| `Enter` | Focus selected item in detail view |
+| `a` / `Esc` | Exit actionable view |
+
+### Use Cases
+
+| Scenario | How Actionable View Helps |
+|----------|---------------------------|
+| **Solo Development** | Always know the highest-impact next task |
+| **Team Standup** | Each person claims a different track |
+| **AI Agent Dispatch** | Agents grab `highest_impact` deterministically |
+| **Sprint Planning** | Estimate work by counting actionable items per track |
+
+---
+
+## 🔀 Flow Matrix View: Cross-Label Dependency Analysis
+
+Press `f` to open the **Flow Matrix View**—an interactive dashboard visualizing how labels (domains/teams) depend on each other. This reveals cross-team bottlenecks that aren't visible in single-issue views.
+
+### Why Cross-Label Flow Matters
+
+In large projects, work is often organized by labels: `frontend`, `backend`, `api`, `auth`, `infra`. Dependencies between issues create implicit dependencies between *labels*. The Flow Matrix exposes these patterns:
+
+- **Which team is blocking others the most?**
+- **Which domain is waiting on the most external work?**
+- **Where are the cross-team coordination bottlenecks?**
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🔀 FLOW MATRIX                                             5 labels · 23 deps │
+├───────────────────────────────────────────┬─────────────────────────────────┤
+│  LABELS                                   │  DETAIL                          │
+│  ─────────────────────────────────────    │  ─────────────────────────────   │
+│                                           │                                  │
+│  ▸ 🔴 api      ━━━━━━━━━━ 0.72           │  Label: api                      │
+│       outgoing: 8 → [auth, db, infra]    │  ──────────────────────          │
+│       incoming: 3 ← [frontend, mobile]   │                                  │
+│                                           │  Bottleneck Score: 0.72         │
+│    🟡 auth     ━━━━━━━━   0.58           │  (top 20% = critical)            │
+│       outgoing: 4 → [db]                 │                                  │
+│       incoming: 5 ← [api, frontend]      │  Outgoing Dependencies:          │
+│                                           │    → auth (3 issues)             │
+│    🟢 frontend ━━━━━     0.31            │    → db (4 issues)               │
+│       outgoing: 2 → [api]                │    → infra (1 issue)             │
+│       incoming: 0                        │                                  │
+│                                           │  Incoming Dependencies:          │
+│    🟢 db       ━━━       0.22            │    ← frontend (2 issues)         │
+│       outgoing: 0                        │    ← mobile (1 issue)            │
+│       incoming: 7 ← [api, auth]          │                                  │
+│                                           │  Critical Path: YES              │
+└───────────────────────────────────────────┴─────────────────────────────────┘
+```
+
+### Bottleneck Score
+
+The bottleneck score (0.0–1.0) measures how much a label blocks cross-domain work:
+
+$$
+\text{Bottleneck} = \frac{\text{Outgoing Deps}}{\text{Total Cross-Label Deps}} \times \text{Criticality Weight}
+$$
+
+| Score | Color | Meaning |
+|-------|-------|---------|
+| 0.7 – 1.0 | 🔴 Red | Critical bottleneck—prioritize unblocking |
+| 0.4 – 0.7 | 🟡 Yellow | Moderate blocking—monitor closely |
+| 0.0 – 0.4 | 🟢 Green | Healthy flow—no coordination issues |
+
+### Drilldown Mode
+
+Press `Enter` on a label to drill down into the specific issues creating cross-label dependencies:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🔀 FLOW MATRIX > api → auth                                    3 issues    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│    🐛 P1 API-123   Auth endpoint returns 500         blocks AUTH-456       │
+│    ✨ P2 API-456   Add OAuth scope validation        blocks AUTH-789       │
+│    📝 P2 API-789   Token refresh rate limiting       blocks AUTH-101       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between labels |
+| `Tab` | Toggle focus between labels list and detail panel |
+| `Enter` | Drill down into cross-label issues |
+| `Esc` | Exit drilldown / Exit view |
+| `f` / `q` | Exit flow matrix view |
+
+### Robot Command
+
+```bash
+bv --robot-label-flow | jq '.flow.bottleneck_labels'
+```
+
+---
+
+## 🎪 Attention View: Label Priority Ranking
+
+Press `]` to open the **Attention View**—a ranked table of labels by attention score, helping you identify which project areas need focus.
+
+### Attention Score Formula
+
+The attention score combines multiple signals to surface neglected or problematic areas:
+
+$$
+\text{Attention} = \frac{\text{PageRank}_{\text{avg}} \times \text{Staleness} \times \text{BlockImpact}}{\text{Velocity} + \epsilon}
+$$
+
+| Component | What It Measures |
+|-----------|------------------|
+| **PageRank (avg)** | Average importance of issues in this label |
+| **Staleness** | How long since issues were updated (higher = more stale) |
+| **Block Impact** | How many issues are blocked within this label |
+| **Velocity** | Completion rate (issues closed per week) |
+
+High attention scores indicate labels that are both important and neglected—they need intervention.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🎪 ATTENTION VIEW                                                          │
+├──────┬────────────┬───────────┬─────────────────────────────────────────────┤
+│ Rank │ Label      │ Attention │ Reason                                      │
+├──────┼────────────┼───────────┼─────────────────────────────────────────────┤
+│  1   │ api        │    2.45   │ blocked=5 stale=3 vel=0.8                   │
+│  2   │ auth       │    1.89   │ blocked=2 stale=4 vel=1.2                   │
+│  3   │ infra      │    1.23   │ blocked=1 stale=6 vel=0.5                   │
+│  4   │ frontend   │    0.67   │ blocked=0 stale=1 vel=3.5                   │
+│  5   │ docs       │    0.34   │ blocked=0 stale=2 vel=2.1                   │
+└──────┴────────────┴───────────┴─────────────────────────────────────────────┘
+```
+
+### Interpreting Results
+
+- **High Attention + Low Velocity**: Area is stuck—investigate blockers
+- **High Attention + High Stale**: Work forgotten—resurface and reprioritize
+- **Low Attention + High Velocity**: Healthy area—keep momentum
+- **High Blocked Count**: Dependencies creating bottleneck
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move between labels |
+| `]` / `Esc` | Exit attention view |
+
+### Robot Command
+
+```bash
+bv --robot-label-attention --attention-limit=10
+```
+
+---
+
+## 📚 Shortcuts Sidebar: Persistent Keyboard Reference
+
+Press `;` (semicolon) or `F2` to toggle the **Shortcuts Sidebar**—a persistent panel showing context-aware keyboard shortcuts alongside your current view.
+
+### Why a Sidebar (Not Just Help)?
+
+The `?` help overlay shows shortcuts but blocks your view. The shortcuts sidebar stays visible while you work, perfect for:
+- Learning keyboard shortcuts without interrupting your flow
+- Quick reference during complex navigation
+- Teaching new users while pair programming
+
+### Context Awareness
+
+The sidebar automatically filters shortcuts to show only those relevant to your current view:
+
+| Context | Shown Sections |
+|---------|----------------|
+| List View | Navigation, Filters, Views, Actions |
+| Board View | Navigation, Board-specific, Swimlanes |
+| Graph View | Navigation, Panning, Zoom |
+| Insights | Navigation, Panels, Toggles |
+| History | Navigation, View Modes, Timeline |
+
+### Visual Layout
+
+```
+┌──────────────────────────────────────────────┬──────────────────────┐
+│                                              │  ⌨️ SHORTCUTS         │
+│                                              │  ──────────────────  │
+│               Main Content Area              │                      │
+│                                              │  Navigation          │
+│           (List, Board, Graph, etc.)         │  j/k    Move ↓/↑     │
+│                                              │  G/gg   End/Start    │
+│                                              │  ^d/^u  Page ↓/↑     │
+│                                              │                      │
+│                                              │  Views               │
+│                                              │  b      Board        │
+│                                              │  g      Graph        │
+│                                              │  i      Insights     │
+│                                              │                      │
+│                                              │  ; to hide           │
+└──────────────────────────────────────────────┴──────────────────────┘
+```
+
+### Sidebar Controls
+
+| Key | Action |
+|-----|--------|
+| `;` or `F2` | Toggle sidebar visibility |
+| `Ctrl+J` | Scroll sidebar down (when visible) |
+| `Ctrl+K` | Scroll sidebar up (when visible) |
+
+The sidebar occupies a fixed 34-character width on the right edge of the terminal.
+
+---
+
+## 🎓 Interactive Tutorial System
+
+Press `` ` `` (backtick) to open the **Interactive Tutorial**—a comprehensive multi-page walkthrough that teaches all bv features through rich, styled content.
+
+### Tutorial Architecture
+
+The tutorial uses a **component-based rendering system** that produces beautiful terminal output:
+
+| Component | Purpose | Example |
+|-----------|---------|---------|
+| **Section** | Styled headers with underlines | `## Navigation` |
+| **Paragraph** | Flowing text with proper wrapping | Explanation text |
+| **KeyTable** | Aligned key-description pairs | `j/k` → Move up/down |
+| **Tip** | Highlighted advice boxes | 💡 TIP: Press g to jump... |
+| **Warning** | Alert boxes for important notes | ⚠️ WARN: This action... |
+| **Code** | Syntax-highlighted code blocks | `bv --robot-triage` |
+| **Bullet** | Styled bullet lists | • First item |
+| **Tree** | Hierarchical structure display | Directory trees |
+| **StatusFlow** | Visual workflow diagrams | Open → In Progress → Closed |
+| **InfoBox** | Bordered information panels | Feature highlights |
+
+### Tutorial Sections
+
+The tutorial covers these topics in depth:
+
+1. **Introduction** — What bv is and why it exists
+2. **Core Concepts** — Beads, dependencies, labels, priorities
+3. **List View** — Navigation, filtering, sorting
+4. **Board View** — Kanban workflows, swimlanes
+5. **Graph View** — Dependency visualization
+6. **Tree View** — Parent-child hierarchies
+7. **Insights Dashboard** — Graph metrics deep dive
+8. **History View** — Git correlation
+9. **Robot Protocol** — AI agent integration
+10. **Workflows** — Triage, planning, sprint management
+
+### Progress Tracking
+
+The tutorial automatically tracks which pages you've viewed:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📖 TUTORIAL                                           Page 3/10 · 30% ████░░░░│
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ## List View Navigation                                                    │
+│  ─────────────────────────                                                  │
+│                                                                             │
+│  The list view is your home base. Navigate with vim-style keys:             │
+│                                                                             │
+│    j / k       Move down / up                                               │
+│    g / G       Jump to top / bottom                                         │
+│    Ctrl+D/U    Page down / up                                               │
+│                                                                             │
+│  ╭──────────────────────────────────────────────────────────────────────╮   │
+│  │ 💡 TIP  Press `/` to search, then type any part of an issue title   │   │
+│  ╰──────────────────────────────────────────────────────────────────────╯   │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ← h previous │ l next → │ t TOC │ q close                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Progress persists across sessions, so you can close bv and resume where you left off.
+
+### Tutorial Navigation
+
+| Key | Action |
+|-----|--------|
+| `h` / `l` or `←` / `→` | Previous / Next page |
+| `j` / `k` | Scroll content up / down |
+| `t` | Toggle Table of Contents |
+| `g` / `G` | First / Last page |
+| `q` / `Esc` | Close tutorial |
+
+### Context-Sensitive Filtering
+
+When you open the tutorial from a specific view (e.g., press `` ` `` while in Board view), the tutorial can filter to show only pages relevant to that context. This provides focused learning without overwhelming new users.
+
+### Quick Reference vs. Full Tutorial
+
+bv provides two help levels:
+
+| Feature | Key | Purpose |
+|---------|-----|---------|
+| **Quick Reference** | `?` | Compact keyboard shortcuts for current view |
+| **Full Tutorial** | `` ` `` | Multi-page walkthrough with examples |
+| **Shortcuts Sidebar** | `;` | Persistent reference while working |
+
+From Quick Reference, press `Space` to jump directly into the full tutorial.
+
+---
+
 ## 📜 History View: Bead-to-Commit Correlation
 
 Press `h` to open the **History View**—an interactive timeline that correlates beads with their related git commits. This bridges the gap between "what work was planned" and "what code was actually written."
