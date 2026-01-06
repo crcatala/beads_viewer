@@ -130,6 +130,9 @@ func (w *Wizard) offerSavedConfig(saved *WizardConfig) (bool, error) {
 
 // Run executes the interactive wizard flow.
 func (w *Wizard) Run() (*WizardResult, error) {
+	// Always print banner first (tests and users expect to see it)
+	w.printBanner()
+
 	// Early exit if stdin is not a terminal and is empty (e.g., piped empty input)
 	// This prevents hanging when the wizard is called non-interactively with no input
 	if !isTerminal() {
@@ -142,8 +145,6 @@ func (w *Wizard) Run() (*WizardResult, error) {
 			}
 		}
 	}
-
-	w.printBanner()
 
 	// Check for saved configuration first (unless BV_NO_SAVED_CONFIG is set)
 	savedConfig, err := LoadWizardConfig()
