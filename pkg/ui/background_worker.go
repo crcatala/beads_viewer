@@ -129,6 +129,10 @@ func (w *BackgroundWorker) Start() error {
 
 	if w.watcher != nil {
 		if err := w.watcher.Start(); err != nil {
+			// Reset started flag so caller can retry or Stop() won't block
+			w.mu.Lock()
+			w.started = false
+			w.mu.Unlock()
 			return err
 		}
 
